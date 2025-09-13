@@ -1,0 +1,7 @@
+To run the lidar odometry
+
+- ros2 launch alphatruck_bringup start_planner.launch.py -->  to get the tf from urdf
+- ros2 launch rplidar_ros view_rplidar_s2_launch.py -- it will launch the lidar to lidar_link ! don't worry about the name view*
+- Rviz2 to see whether the scan is there or not.
+Run them in seperate terminals
+

@@ -1,0 +1,16 @@
+{
+    "mixin": {
+        "run": {
+            "controllers": {
+                "python-path-run": [
+                    "/home/alphatruck/miniconda3/envs/cu-mppi/lib/python3.10/site-packages"
+                ]
+            },
+            "alphatruck_bringup": {
+                "python-path-run": [
+                    "/home/alphatruck/miniconda3/envs/cu-mppi/lib/python3.10/site-packages"
+                ]
+            }
+        }
+    }
+}
