@@ -43,7 +43,7 @@ def generate_launch_description():
     # LiDAR configuration arguments (pass through to perception)
     serial_port_arg = DeclareLaunchArgument(
         'serial_port',
-        default_value='/dev/ttyUSB0',
+        default_value='/dev/ttyUSB1',
         description='Serial port for LiDAR connection'
     )
 
@@ -88,15 +88,43 @@ def generate_launch_description():
         }.items()
     )
 
-    # Step 2: Launch dummy odometry publisher (needed for controller)
-    dummy_odom_node = Node(
-        package='perception',
-        executable='dummy_odom_publisher',
-        name='dummy_odom_publisher',
-        output='screen',
+    # # Step 2: Launch dummy odometry publisher (needed for controller)
+    # dummy_odom_node = Node(
+    #     package='perception',
+    #     executable='dummy_odom_publisher',
+    #     name='dummy_odom_publisher',
+    #     output='screen',
+    # )
+    
+    # Step 2: Launch RF2O laser odometry
+    rf2o_pkg = get_package_share_directory('rf2o_laser_odometry')
+    rf2o_launch_path = os.path.join(rf2o_pkg, 'launch', 'rf2o_laser_odometry.launch.py')
+    
+    rf2o_laser_odometry_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(rf2o_launch_path)
     )
 
-    # Step 3: Launch test goal publisher (for testing and demonstration)
+    # Step 3: Launch VectorNav IMU
+    vectornav_pkg = get_package_share_directory('vectornav')
+    vectornav_launch_path = os.path.join(vectornav_pkg, 'launch', 'vectornav.launch.py')
+    
+    imu_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(vectornav_launch_path)
+    )
+
+    # Step 4: Launch EKF for sensor fusion
+    ekf_config_path = os.path.join(bringup_pkg, 'config', 'ekf.yaml')
+    
+    ekf_node = Node(
+        package='robot_localization',
+        executable='ekf_node',
+        name='ekf_filter_node',
+        output='screen',
+        parameters=[ekf_config_path],
+        remappings=[('odometry/filtered', '/odometry/filtered')]
+    )
+
+    # Step 5: Launch test goal publisher (for testing and demonstration)
     test_goal_node = Node(
         package='perception',
         executable='test_goal_publisher',
@@ -104,7 +132,7 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Step 4: Launch local planner with delay to ensure all prerequisites are ready
+    # Step 6: Launch local planner with delay to ensure all prerequisites are ready
     local_planner_node = Node(
         package='controllers',
         executable='local_planner_node',
@@ -135,9 +163,26 @@ def generate_launch_description():
         robot_state_publisher,
         static_tf_map_odom,
         
-        # Sequential launch: Perception -> Dummy Nodes -> Planner
-        perception_launch,     # Step 1: LiDAR + costmap processing (t=0)
-        dummy_odom_node,       # Step 2: Dummy odometry (t=4s)
-        test_goal_node,        # Step 3: Test goal publisher (t=5s)
-        local_planner_node,    # Step 4: Local planner (t=6s)
+        # Sequential launch with time delay: Perception -> Laser Odom -> IMU -> EKF -> Planner
+        perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
+        TimerAction(
+            period=5.0,
+            actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
+        ),
+        TimerAction(
+            period=7.0,
+            actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
+        ),
+        TimerAction(
+            period=8.0,
+            actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
+        ),
+        # TimerAction(
+        #     period=9.0,
+        #     actions=[test_goal_node]              # Step 5: Test goal publisher (t=9s)
+        # ),
+        # TimerAction(
+        #     period=10.0,
+        #     actions=[local_planner_node]         # Step 6: Local planner (t=10s)
+        # )
     ])
