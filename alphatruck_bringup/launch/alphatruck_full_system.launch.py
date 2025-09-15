@@ -24,7 +24,9 @@ def generate_launch_description():
     # Define launch arguments for runtime flexibility
     controller_type_arg = DeclareLaunchArgument(
         'controller_type',
-        default_value='cu_mppi_map_conditioned_std',
+        # default_value='cu_mppi_map_conditioned_std',
+        # default_value='mppi_pytorch',
+        default_value='log_mppi_pytorch',
         description='The type of controller to use (e.g., mppi_pytorch, cu_mppi_unsupervised_std, cu_mppi_map_conditioned_std)'
     )
 
@@ -177,12 +179,26 @@ def generate_launch_description():
             period=8.0,
             actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
         ),
-        # TimerAction(
-        #     period=9.0,
-        #     actions=[test_goal_node]              # Step 5: Test goal publisher (t=9s)
-        # ),
-        # TimerAction(
-        #     period=10.0,
-        #     actions=[local_planner_node]         # Step 6: Local planner (t=10s)
-        # )
+        TimerAction(
+            period=9.0,
+            actions=[test_goal_node]              # Step 5: Test goal publisher (t=9s)
+        ),
+        TimerAction(
+            period=9.5,
+            actions=[
+                Node(
+                    package='xmaxx_bringup',
+                    executable='xmaxx_interface_node',
+                    name='xmaxx_interface_node',
+                    output='screen',
+                    parameters=[
+                        {'use_sim_time': LaunchConfiguration('use_sim_time')}
+                    ]
+                )
+            ]                                    # Step 5.5: Xmaxx hardware interface (t=9.5s)
+        ),
+        TimerAction(
+            period=10.0,
+            actions=[local_planner_node]         # Step 6: Local planner (t=10s)
+        )
     ])

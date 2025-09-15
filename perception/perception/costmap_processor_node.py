@@ -65,6 +65,7 @@ class CostmapProcessorNode(Node):
         self.get_logger().info(f"Inflation radius: {self.inflation_radius} cells")
         self.get_logger().info(f"SDF inflation: {self.sdf_inflation_cells} cells")
         self.get_logger().info(f"LiDAR max range: {self.max_range} m")
+        self.get_logger().info(f"Robot body filter radius: {self.robot_body_radius} m")
 
     def load_config(self):
         """Load configuration from the centralized experiment config file."""
@@ -90,6 +91,9 @@ class CostmapProcessorNode(Node):
         self.max_inflation_value = config['max_inflation_value']
         self.sdf_inflation_cells = config['sdf_inflation_cells']
         self.max_range = config['lidar_max_range']
+        
+        # Robot body filtering parameters
+        self.robot_body_radius = config.get('robot_body_filter_radius', 0.3)  # Default 0.3m
         
         self.get_logger().info(f"Successfully loaded config from {config_path}")
 
@@ -142,6 +146,11 @@ class CostmapProcessorNode(Node):
             # Obstacle position in the robot's frame (+X is forward)
             obs_x_robot = range_val * np.cos(angles[i])
             obs_y_robot = range_val * np.sin(angles[i])
+            
+            # Filter out robot body: ignore any obstacles within robot_body_radius of robot center
+            distance_from_robot = np.sqrt(obs_x_robot**2 + obs_y_robot**2)
+            if distance_from_robot < self.robot_body_radius:
+                continue
 
             # # Apply 90-degree clockwise rotation to align with visualization
             # # NOTE: ideally this should be done in URDF, now it's a hack

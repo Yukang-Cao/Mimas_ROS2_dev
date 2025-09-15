@@ -106,6 +106,7 @@ class LocalPlannerNode(Node):
         self.global_goal = None
         self.latest_costmap_msg = None
         self.latest_sdf_msg = None
+        self.goal_received_once = False  # Flag to prevent repeated goal resets
 
         # --- TF2 Buffer and Listener ---
         self.tf_buffer = tf2_ros.Buffer()
@@ -113,7 +114,7 @@ class LocalPlannerNode(Node):
 
         # --- Subscribers ---
         sensor_qos = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=1)
-        self.create_subscription(Odometry, '/odom', self.odom_callback, sensor_qos)
+        self.create_subscription(Odometry, '/odometry/filtered', self.odom_callback, sensor_qos)
         self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
         self.create_subscription(OccupancyGrid, '/local_costmap_inflated', self.costmap_callback, sensor_qos)
         
@@ -237,10 +238,16 @@ class LocalPlannerNode(Node):
         self.current_velocity = msg.twist.twist.linear.x
 
     def goal_callback(self, msg: PoseStamped):
-        self.global_goal = msg
-        if self.controller:
-            self.controller.reset()
-        self.get_logger().info(f"New global goal received at ({self.global_goal.pose.position.x:.2f}, {self.global_goal.pose.position.y:.2f})")
+        # Only accept the first goal to test if frequent resets cause oscillations
+        if not self.goal_received_once:
+            self.global_goal = msg
+            if self.controller:
+                self.controller.reset()
+            self.goal_received_once = True
+            self.get_logger().info(f"\033[91mFIRST goal received and accepted at ({self.global_goal.pose.position.x:.2f}, {self.global_goal.pose.position.y:.2f})\033[0m")
+            self.get_logger().info("\033[91mSubsequent goals will be IGNORED for testing purposes\033[0m")
+        else:
+            self.get_logger().info(f"Ignoring subsequent goal at ({msg.pose.position.x:.2f}, {msg.pose.position.y:.2f}) - using first goal only")
 
     def costmap_callback(self, msg: OccupancyGrid):
         self.latest_costmap_msg = msg
@@ -437,14 +444,15 @@ class LocalPlannerNode(Node):
         v = float(control_action[0])
         # The controller library outputs steering angle (delta)
         delta = float(control_action[1])
+        omega = delta # NOTE: directly publish the steering angle as command to servo
         
-        # Convert steering angle to angular velocity (omega) for the Twist message
-        # omega = v * tan(delta) / L
-        L = self.controller.wheelbase
-        if L > 0 and not math.isnan(delta):
-            omega = v * np.tan(delta) / L
-        else:
-            omega = 0.0
+        # # Convert steering angle to angular velocity (omega) for the Twist message
+        # # omega = v * tan(delta) / L
+        # L = self.controller.wheelbase
+        # if L > 0 and not math.isnan(delta):
+        #     omega = v * np.tan(delta) / L
+        # else:
+        #     omega = 0.0
 
         twist.linear.x = v
         twist.angular.z = omega

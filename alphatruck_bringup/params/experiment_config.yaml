@@ -23,7 +23,7 @@ dt: 0.10                      # Simulation timestep (affects all controllers)
 seed: 2025                    # Random seed for reproducibility
 
 # Sampling parameters 
-num_rollouts: 256              # Number of control rollouts/samples
+num_rollouts: 1024            # Number of control rollouts/samples
 num_vis_rollouts: 1000         # Number of rollouts for visualization
 initialization_budget_ratio: 0.5  # Fraction of sampling budget allocated to CUniform initialization (0.5 = 50%)
 
@@ -35,7 +35,8 @@ vehicle_wheelbase: 0.48       # Wheelbase in meters (alphatruck)
 # Control constraints
 # If min_v != max_v, variable_velocity_mode is active.
 # vrange: [0.5, 2.5]            # [min_v, max_v] (m/s)
-vrange: [2.0, 2.5]            # [min_v, max_v] (m/s)
+# vrange: [2.0, 2.5]            # [min_v, max_v] (m/s)
+vrange: [2.5, 2.5]            # [min_v, max_v] (m/s)
 wrange: [-0.524, 0.524]       # [min_steering_angle, max_steering_angle] (radians)
 
 # Cost function weights (Tuning parameters)
@@ -62,13 +63,15 @@ robot_footprint_size: 3
 local_costmap_size: 121         # Local costmap size in grid cells
 local_costmap_resolution: 0.05  # Local costmap resolution in meters/cell
 lidar_max_range: 30.0           # Maximum range to consider from LiDAR in meters
+# REAL ROBOT ONLY PARAMETER
+robot_body_filter_radius: 0.3   # Radius around robot center to ignore LiDAR points (meters)
 
 #===============================================================================
 # Visualization Configuration
 #===============================================================================
 visualization:
-  enabled: True                 # Master switch
-  visualize_trajectories: False # Enable/disable trajectory visualization (saves significant time if false)
+  enabled: False                 # Master switch
+  visualize_trajectories: True  # Enable/disable trajectory visualization (saves significant time if false)
   visualize_goal: True          # Enable/disable local goal visualization
 
 #===============================================================================
@@ -131,6 +134,8 @@ cuniform_controller:
 # MPPI CONTROLLER CONFIGURATION
 # ========================================
 mppi_controller:
+  # FOR ROS2, we use the default value of -1, which means the controller
+  # will use the one based on the one set in the launch file.
   mppi_type: -1            # 0: Normal distribution, 1: NLN (Normal Log-Normal) 
 
   # Control noise parameters

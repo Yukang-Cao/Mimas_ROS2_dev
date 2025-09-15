@@ -27,10 +27,11 @@ class TestGoalPublisher(Node):
         
         # Create different goal positions for testing
         goals = [
-            (2.0, 0.0),    # Forward
-            (1.5, 1.0),    # Forward right
-            (1.5, -1.0),   # Forward left
-            (2.0, 0.5),    # Forward slight right
+            (-4.0, 0.0),    # Forward
+            # (0.0, -5.0),    # Forward
+            # (1.5, 1.0),    # Forward right
+            # (1.5, -1.0),   # Forward left
+            # (2.0, 0.5),    # Forward slight right
         ]
         
         goal_x, goal_y = goals[self.goal_counter % len(goals)]

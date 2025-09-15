@@ -9,7 +9,7 @@
 
 // constructor implementation
 XmaxxRosNode::XmaxxRosNode(const rclcpp::NodeOptions & options)
-    : Node("xmaxx_interface_node", options), last_control_update_(this->now())
+    : Node("xmaxx_interface_node", options), last_control_update_time_(this->now())
 {
     RCLCPP_INFO(this->get_logger(), "Initializing Xmaxx ROS Node...");
 
@@ -144,8 +144,8 @@ void XmaxxRosNode::feedforwardControl()
         xmaxx_interface_->sendDriveCmd(throttle_cmd, steering_cmd);
     }
     
-    RCLCPP_INFO(this->get_logger(), "Feedforward: targets(%.3f,%.3f) -> cmd(%d,%d)",
-                 target_linear, target_angular, throttle_cmd, steering_cmd);
+    RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 2000, "Feedforward: targets(%.3f,%.3f) -> cmd(%d,%d)",
+                          target_linear, target_angular, throttle_cmd, steering_cmd);
 }
 
 // NOTE: this PID control is not implemented
