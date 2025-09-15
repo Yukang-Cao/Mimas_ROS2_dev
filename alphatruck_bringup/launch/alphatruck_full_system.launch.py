@@ -24,15 +24,15 @@ def generate_launch_description():
     # Define launch arguments for runtime flexibility
     controller_type_arg = DeclareLaunchArgument(
         'controller_type',
-        # default_value='cu_mppi_map_conditioned_std',
+        default_value='cu_mppi_map_conditioned_log',
         # default_value='mppi_pytorch',
-        default_value='log_mppi_pytorch',
+        # default_value='log_mppi_pytorch',
         description='The type of controller to use (e.g., mppi_pytorch, cu_mppi_unsupervised_std, cu_mppi_map_conditioned_std)'
     )
 
     control_frequency_arg = DeclareLaunchArgument(
         'control_frequency',
-        default_value='20.0',
+        default_value='10.0',
         description='Frequency (Hz) of the control loop'
     )
 

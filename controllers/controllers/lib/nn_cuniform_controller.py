@@ -553,7 +553,7 @@ class CUniformController(TorchPlannerBase):
         Evaluation should be done separately to keep the function modular.
         """
         # Set to False for deployment to maximize performance by removing synchronization overhead.
-        ENABLE_DETAILED_PROFILING = True
+        ENABLE_DETAILED_PROFILING = False
 
         t_step = self.dt
         if velocity_override is not None:

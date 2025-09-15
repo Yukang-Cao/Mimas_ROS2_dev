@@ -18,12 +18,12 @@ controllers_to_test:
 global_map_resolution: 0.05   # global map grid resolution (meters/cell)
 
 # Planning Parameters
-horizon_T: 1.2                # Planning horizon in seconds
-dt: 0.10                      # Simulation timestep (affects all controllers)
+horizon_T: 2.0                # Planning horizon in seconds
+dt: 0.20                      # Simulation timestep (affects all controllers)
 seed: 2025                    # Random seed for reproducibility
 
 # Sampling parameters 
-num_rollouts: 1024            # Number of control rollouts/samples
+num_rollouts: 256            # Number of control rollouts/samples
 num_vis_rollouts: 1000         # Number of rollouts for visualization
 initialization_budget_ratio: 0.5  # Fraction of sampling budget allocated to CUniform initialization (0.5 = 50%)
 
@@ -36,42 +36,44 @@ vehicle_wheelbase: 0.48       # Wheelbase in meters (alphatruck)
 # If min_v != max_v, variable_velocity_mode is active.
 # vrange: [0.5, 2.5]            # [min_v, max_v] (m/s)
 # vrange: [2.0, 2.5]            # [min_v, max_v] (m/s)
-vrange: [2.5, 2.5]            # [min_v, max_v] (m/s)
+# vrange: [1.25, 1.25]
+vrange: [0.5, 1.5]
+  # vrange: [2.5, 2.5]            # [min_v, max_v] (m/s)
 wrange: [-0.524, 0.524]       # [min_steering_angle, max_steering_angle] (radians)
 
 # Cost function weights (Tuning parameters)
 terminal_weight: 5.0          # Weight for terminal cost
-obs_penalty: 2000.0           # Penalty for obstacle collision
+obs_penalty: 1000.0           # Penalty for obstacle collision
 dist_weight: 1.0              # Weight for distance-to-goal cost
-goal_tolerance: 0.15          # Goal tolerance for all controllers (meters)
+goal_tolerance: 0.30          # Goal tolerance for all controllers (meters)
 
 # A sensitivity threshold defining a "hard collision" for the trajectory evaluation process.
 # The planner calculates a summed cost by sampling the inflated_costmap under the robot's footprint grid
 # If this summed cost exceeds (footprint_area * collision_occupancy_ratio), the trajectory is heavily penalized. 
 # A lower value creates a more cautious planner that avoids inflation zones, 
 # a higher value allows for more aggressive navigation closer to obstacles.
-collision_occupancy_ratio: 0.35
+collision_occupancy_ratio: 0.50
 
 # The side length (in grid cells) of the square area used for cost evaluation within the planner.
 # This footprint is used to sample the inflated_costmap to calculate obstacle proximity and collision
 # costs for the thousands of candidate trajectories. It is NOT used for the final physical collision
 # check of the robot's actual state, which is handled separately by the environment manager
 # E.g., a value of 7 means a 7x7 grid is checked.
-robot_footprint_size: 3
+robot_footprint_size: 9
 
 # Local Costmap Parameters (CRITICAL: Must match the perception node output!)
 local_costmap_size: 121         # Local costmap size in grid cells
 local_costmap_resolution: 0.05  # Local costmap resolution in meters/cell
 lidar_max_range: 30.0           # Maximum range to consider from LiDAR in meters
 # REAL ROBOT ONLY PARAMETER
-robot_body_filter_radius: 0.3   # Radius around robot center to ignore LiDAR points (meters)
+robot_body_filter_radius: 0.2   # Radius around robot center to ignore LiDAR points (meters)
 
 #===============================================================================
 # Visualization Configuration
 #===============================================================================
 visualization:
-  enabled: False                 # Master switch
-  visualize_trajectories: True  # Enable/disable trajectory visualization (saves significant time if false)
+  enabled: True                 # Master switch
+  visualize_trajectories: False  # Enable/disable trajectory visualization (saves significant time if false)
   visualize_goal: True          # Enable/disable local goal visualization
 
 #===============================================================================
@@ -84,7 +86,7 @@ visualization:
 # smoother, safer paths that stay away from walls.
 # NOTE: Due to the linear decay formula used, this must be at least 2 to create a
 # cost greater than zero in the first adjacent free-space cell.
-inflation_radius: 6            # Obstacle inflation radius in grid cells
+inflation_radius: 10            # Obstacle inflation radius in grid cells
 
 # The maximum cost value at the immediate boundary of an obstacle. The cost will
 # then decay linearly from this value down to 0 at the inflation_radius.
@@ -95,7 +97,7 @@ max_inflation_value: 1.0
 # This uses binary dilation to create a "hard" safety margin, effectively
 # "thickening" the walls. This is a critical preprocessing step for the NN model.
 # NOTE: Setting this to at least 1 can help close small gaps in LiDAR-generated maps
-sdf_inflation_cells: 4
+sdf_inflation_cells: 5
 
 #===============================================================================
 # CONTROLLER-SPECIFIC CONFIGURATIONS
@@ -140,8 +142,8 @@ mppi_controller:
 
   # Control noise parameters
   # If vrange is variable, u_std[0] (velocity noise) should ideally be > 0.
-  u_std: [0.5, 0.10]       # Standard deviation for [linear_vel, angular_vel] noise
+  u_std: [0.2, 0.10]       # Standard deviation for [linear_vel, angular_vel] noise
 
   # MPPI algorithm parameters
-  lambda_weight: 0.5      # Temperature parameter for importance weighting
+  lambda_weight: 0.01      # Temperature parameter for importance weighting
   num_opt: 1              # Number of optimization iterations per solve 

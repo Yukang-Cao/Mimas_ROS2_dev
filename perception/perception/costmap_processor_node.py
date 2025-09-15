@@ -93,7 +93,7 @@ class CostmapProcessorNode(Node):
         self.max_range = config['lidar_max_range']
         
         # Robot body filtering parameters
-        self.robot_body_radius = config.get('robot_body_filter_radius', 0.3)  # Default 0.3m
+        self.robot_body_radius = config['robot_body_filter_radius']
         
         self.get_logger().info(f"Successfully loaded config from {config_path}")
 
