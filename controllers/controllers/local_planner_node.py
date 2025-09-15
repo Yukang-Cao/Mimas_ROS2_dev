@@ -14,7 +14,7 @@ import warnings
 warnings.filterwarnings("ignore", message="Unable to import Axes3D")
 
 # ROS Message Types
-from geometry_msgs.msg import Twist, PoseStamped, Point
+from geometry_msgs.msg import Twist, PoseStamped, Point, TwistStamped
 from nav_msgs.msg import Odometry, OccupancyGrid, Path
 from visualization_msgs.msg import MarkerArray, Marker
 from ament_index_python.packages import get_package_share_directory
@@ -101,7 +101,7 @@ class LocalPlannerNode(Node):
                 rclpy.try_shutdown()
                 return
 
-        # --- State Variables ---
+        # --- State Variables ---j
         self.current_velocity = 0.0
         self.global_goal = None
         self.latest_costmap_msg = None
@@ -114,7 +114,8 @@ class LocalPlannerNode(Node):
 
         # --- Subscribers ---
         sensor_qos = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=1)
-        self.create_subscription(Odometry, '/odometry/filtered', self.odom_callback, sensor_qos)
+        # self.create_subscription(Odometry, '/odometry/filtered', self.odom_callback, sensor_qos)
+        self.create_subscription(TwistStamped, '/vrpn_mocap/titan_alphatruck/twist', self.twist_callback, sensor_qos)
         self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
         self.create_subscription(OccupancyGrid, '/local_costmap_inflated', self.costmap_callback, sensor_qos)
         
@@ -236,6 +237,10 @@ class LocalPlannerNode(Node):
     def odom_callback(self, msg: Odometry):
         # Assuming velocity is provided in the child frame (base_link)
         self.current_velocity = msg.twist.twist.linear.x
+
+    def twist_callback(self, msg: TwistStamped):
+        # The TwistStamped message provides velocity in the frame specified in its header 
+        self.current_velocity = msg.twist.linear.x
 
     def goal_callback(self, msg: PoseStamped):
         # Only accept the first goal to test if frequent resets cause oscillations
@@ -444,7 +449,7 @@ class LocalPlannerNode(Node):
         v = float(control_action[0])
         # The controller library outputs steering angle (delta)
         delta = float(control_action[1])
-        omega = delta # NOTE: directly publish the steering angle as command to servo
+        omega = -delta # NOTE: directly publish the steering angle as command to servo, add - to correct transformation
         
         # # Convert steering angle to angular velocity (omega) for the Twist message
         # # omega = v * tan(delta) / L

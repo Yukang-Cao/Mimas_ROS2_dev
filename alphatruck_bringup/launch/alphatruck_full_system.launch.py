@@ -71,14 +71,22 @@ def generate_launch_description():
         ]
     )
 
-    # Static transform publisher for map -> odom (replace with real localization later)
-    static_tf_map_odom = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='static_tf_map_odom',
-        arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
+    # broadcast TF from the motion capture system's pose topic
+    mocap_tf_broadcaster_node = Node(
+        package='mocap_tf_broadcaster',
+        executable='broadcaster_node',
+        name='mocap_tf_broadcaster_node',
         output='screen'
     )
+
+    # Static transform publisher for map -> odom (replace with real localization later)
+    #static_tf_map_odom = Node(
+    #    package='tf2_ros',
+    #    executable='static_transform_publisher',
+    #    name='static_tf_map_odom',
+    #    arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
+    #    output='screen'
+    #)
 
     # Step 1: Launch perception system (LiDAR + costmap processing)
     perception_launch = IncludeLaunchDescription(
@@ -162,29 +170,31 @@ def generate_launch_description():
         serial_baudrate_arg,
         
         # Robot description and TF
-        robot_state_publisher,
-        static_tf_map_odom,
+        robot_state_publisher,       # For base_link -> lidar_link etc
+        #static_tf_map_odom,
+        # NOTE: dont' forget to start the mocap node if using this
+        mocap_tf_broadcaster_node,   # For world -> base_link
         
         # Sequential launch with time delay: Perception -> Laser Odom -> IMU -> EKF -> Planner
         perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
-        TimerAction(
-            period=5.0,
-            actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
-        ),
-        TimerAction(
-            period=7.0,
-            actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
-        ),
-        TimerAction(
-            period=8.0,
-            actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
-        ),
+        # TimerAction(
+        #    period=5.0,
+        #   actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
+        #),
+        #TimerAction(
+        #    period=7.0,
+        #    actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
+        #),
+        #TimerAction(
+        #    period=8.0,
+        #    actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
+        #),
         TimerAction(
             period=9.0,
             actions=[test_goal_node]              # Step 5: Test goal publisher (t=9s)
         ),
         TimerAction(
-            period=9.5,
+            period=7.5,
             actions=[
                 Node(
                     package='xmaxx_bringup',
