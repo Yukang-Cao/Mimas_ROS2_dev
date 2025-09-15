@@ -1,0 +1,73 @@
+cmake_minimum_required(VERSION 3.8)
+project(xmaxx_bringup)
+
+# Set C++ standard (The library code requires C++17)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(xmaxx_msgs REQUIRED)
+# The Xmaxx library uses std::thread, which requires the Threads package.
+find_package(Threads REQUIRED)
+
+# --- Handle External Xmaxx Library ---
+
+# Define the path to the workspace root where the external files are located.
+# CMAKE_CURRENT_SOURCE_DIR is <ws_root>/src/xmaxx_bringup
+# navigate up two levels (../../) to the workspace root (<ws_root>)
+set(WORKSPACE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../")
+
+# add the workspace root to the include directories so the compiler can find xmaxx.h and xmaxx_protocol.h
+include_directories("${WORKSPACE_ROOT}")
+
+# add the local include directory so the compiler can find our header files
+include_directories(include)
+
+# define the source files for the executable (ROS node source and the external library source)
+set(NODE_SOURCES
+    src/xmaxx_ros_node.cpp
+    "${WORKSPACE_ROOT}/xmaxx.cpp"
+)
+
+# --- Node Setup ---
+# create the executable from the combined source files
+add_executable(xmaxx_interface_node ${NODE_SOURCES})
+
+# link against ROS dependencies
+ament_target_dependencies(
+  xmaxx_interface_node 
+  rclcpp 
+  geometry_msgs 
+  xmaxx_msgs
+  Threads
+  )
+
+# explicitly link against the Threads library (for pthread on Linux)
+# target_link_libraries(xmaxx_interface_node PRIVATE Threads::Threads)
+
+# install the executable so it can be run with "ros2 run"
+install(TARGETS
+  xmaxx_interface_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+if(BUILD_TESTING)
+  find_package(ament_lint_auto REQUIRED)
+  # the following line skips the linter which checks for copyrights
+  # comment the line when a copyright and license is added to all source files
+  set(ament_cmake_copyright_FOUND TRUE)
+  # the following line skips cpplint (only works in a git repo)
+  # comment the line when this package is in a git repo and when
+  # a copyright and license is added to all source files
+  set(ament_cmake_cpplint_FOUND TRUE)
+  ament_lint_auto_find_test_dependencies()
+endif()
+
+ament_package()
