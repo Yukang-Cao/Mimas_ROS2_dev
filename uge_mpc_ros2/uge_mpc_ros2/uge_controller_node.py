@@ -120,9 +120,9 @@ class UGEControllerNode(Node):
                             obstacle_weight=100.0)
 
         # UAE PARAMS
-        self.trajs = 8
-        self.iters = 6
-        self.candidates_per_traj = 16
+        self.trajs = 6
+        self.iters = 4
+        self.candidates_per_traj = 12
         self.decay_sharpness = 2.0
         # --- Warm-up JIT (don’t count compile time) ---
         dummy_x0 = np.array([0.0, 0.0, 0.0], dtype=np.float32)
@@ -170,7 +170,7 @@ class UGEControllerNode(Node):
         self.latest_sdf_msg = None
         self.goal_received_once = False  # Flag to prevent repeated goal resets
         
-        self.viz = True
+        self.viz = False
         self.smoothing_window = 2               # number of control steps to average
         self.control_buffer = deque(maxlen=self.smoothing_window)
         self._smoothing_warmed_up = False
@@ -253,6 +253,7 @@ class UGEControllerNode(Node):
         '''
         It nees to take the following inputs:  the local goal and the costmap
         '''
+        plan_start = time.monotonic()
         # 3.1 Run the UAE-TO (uae)
         self.uae.curr_x = self.uae_cost_planner.params['x0']
         # self.get_logger().info(f"Current x: {self.uae.curr_x}")
@@ -265,16 +266,18 @@ class UGEControllerNode(Node):
                                     decay_sharpness=self.decay_sharpness)
         # calucalte the cost
         # self.get_logger().info(f"Final trajectories: {final_trajs}")
+        
         self.uae_cost_planner.load_trajectories(final_trajs)
         min_cost_idx, total_cost_uae = self.uae_cost_planner.solve_uae(final_trajs)
-
+        plan_time = time.monotonic() - plan_start
+        self.get_logger().info(f"Plan time: {plan_time} seconds")
         useq_uae = action_seqs[min_cost_idx]
 
         self.get_logger().info(f"Min cost index: {min_cost_idx}")
         # self.get_logger().info(f"First action: {action_seqs[min_cost_idx][0]}")
 
         rollout_actions, rollout_states = self.uae.generate_rollouts(
-                                useq_uae, self.T, self.uae.curr_x, noise_covariance=self.R, v_bounds=self.v_bounds, delta_bounds=self.delta_bounds, num_rollouts=256)
+                                useq_uae, self.T, self.uae.curr_x, noise_covariance=self.R, v_bounds=self.v_bounds, delta_bounds=self.delta_bounds, num_rollouts=128)
                                 # solve the mppi update
         self.uae_cost_planner.load_trajectories(rollout_states)
         min_cost_idx_uae_mppi, total_cost_mppi = self.uae_cost_planner.solve_uae(rollout_states)

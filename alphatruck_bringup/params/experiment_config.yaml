@@ -18,8 +18,8 @@ controllers_to_test:
 global_map_resolution: 0.05   # global map grid resolution (meters/cell)
 
 # Planning Parameters
-horizon_T: 3.0                # Planning horizon in seconds
-dt: 0.10                      # Simulation timestep (affects all controllers)
+horizon_T: 6.0                # Planning horizon in seconds
+dt: 0.20                      # Simulation timestep (affects all controllers)
 seed: 2025                    # Random seed for reproducibility
 
 # Sampling parameters 

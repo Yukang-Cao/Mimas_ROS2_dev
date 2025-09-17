@@ -26,8 +26,8 @@ def generate_launch_description():
         'controller_type',
         # default_value='cu_mppi_map_conditioned_log',
         # default_value = 'cu_mppi_unsupervised_log',
-        # default_value='mppi_pytorch',
-        default_value='log_mppi_pytorch',
+        default_value='mppi_pytorch',
+        # default_value='log_mppi_pytorch',
         description='The type of controller to use (e.g., mppi_pytorch, cu_mppi_unsupervised_std, cu_mppi_map_conditioned_std)'
     )
 
