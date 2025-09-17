@@ -18,12 +18,12 @@ controllers_to_test:
 global_map_resolution: 0.05   # global map grid resolution (meters/cell)
 
 # Planning Parameters
-horizon_T: 3.0                # Planning horizon in seconds
-dt: 0.10                      # Simulation timestep (affects all controllers)
+horizon_T: 2.0                # Planning horizon in seconds
+dt: 0.20                      # Simulation timestep (affects all controllers)
 seed: 2025                    # Random seed for reproducibility
 
 # Sampling parameters 
-num_rollouts: 512            # Number of control rollouts/samples
+num_rollouts: 128            # Number of control rollouts/samples
 num_vis_rollouts: 1000         # Number of rollouts for visualization
 initialization_budget_ratio: 0.5  # Fraction of sampling budget allocated to CUniform initialization (0.5 = 50%)
 
@@ -86,7 +86,7 @@ visualization:
 # smoother, safer paths that stay away from walls.
 # NOTE: Due to the linear decay formula used, this must be at least 2 to create a
 # cost greater than zero in the first adjacent free-space cell.
-inflation_radius: 10            # Obstacle inflation radius in grid cells
+inflation_radius: 13            # Obstacle inflation radius in grid cells
 
 # The maximum cost value at the immediate boundary of an obstacle. The cost will
 # then decay linearly from this value down to 0 at the inflation_radius.

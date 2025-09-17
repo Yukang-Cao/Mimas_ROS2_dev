@@ -103,8 +103,9 @@ class CUniformController(TorchPlannerBase):
 
         print(f"C-Uniform Controller initialized (type: {self.controller_type}).")
         print(f"  Actor Optimization (TensorRT): {is_actor_trt}")
-        assert is_actor_trt, "\033[91mActor model must be optimized with TensorRT\033[0m"
+
         if self.controller_type == 1:
+            assert is_actor_trt, "\033[91mActor model must be optimized with TensorRT\033[0m"
             print(f"  Feature Extractor Optimization (TensorRT): {is_fe_trt}")
             assert is_fe_trt, "\033[91mFeature Extractor model must be optimized with TensorRT\033[0m"
 

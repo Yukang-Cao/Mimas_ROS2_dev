@@ -1,0 +1,29 @@
+# time step
+dt: 0.2
+
+# geometry
+lf: 0.24
+lr: 0.24
+wheelbase: 0.48
+length: 0.78
+width: 0.54
+
+# mass & inertia
+m: 3.10
+Iz: 0.04712
+h_cg: 0.074
+
+# tire/road
+CSf: 4.728        # [1/rad] coefficient used in Eq.(3)
+CSr: 5.546        # [1/rad]
+mu: 1.0489
+
+# limits (from paper + reasonable defaults)
+delta_bounds: [-0.53, 0.53]      # [rad] +- 20 degrees
+delta_rate_bounds: [-6.0, 6.0]    # [rad/s]  (servo-scale, not specified; safe default)
+v_bounds: [0.4, 1.5]              # [m/s]    (they hold 1 m/s in experiments)
+
+# optional: friction-circle lateral acc cap (mu*g) if your model uses it
+a_lat_max: null
+clip_friction_circle: true
+
