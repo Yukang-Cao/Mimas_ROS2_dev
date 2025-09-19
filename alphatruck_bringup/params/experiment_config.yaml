@@ -72,7 +72,7 @@ robot_body_filter_radius: 0.2   # Radius around robot center to ignore LiDAR poi
 # Visualization Configuration
 #===============================================================================
 visualization:
-  enabled: True                 # Master switch
+  enabled: False                 # Master switch
   visualize_trajectories: False  # Enable/disable trajectory visualization (saves significant time if false)
   visualize_goal: True          # Enable/disable local goal visualization
 

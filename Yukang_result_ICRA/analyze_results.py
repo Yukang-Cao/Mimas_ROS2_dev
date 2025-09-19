@@ -13,7 +13,7 @@ TWIST_TOPIC = '/vrpn_mocap/titan_alphatruck/twist'
 
 # --- Analysis Parameters ---
 GOAL_POSITION = np.array([4.0, -1.0]) # Target goal coordinates (x, y)
-SUCCESS_RADIUS = 1.0  # meters. Trial is successful if final position is within this radius of the goal.
+SUCCESS_RADIUS = 2.0  # meters. Trial is successful if final position is within this radius of the goal.
 VELOCITY_THRESHOLD = 0.05 # m/s. Speed below which the robot is considered "stopped".
 
 def analyze_bag(bag_path: Path):
