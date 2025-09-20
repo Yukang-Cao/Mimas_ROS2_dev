@@ -1,0 +1,24 @@
+xmaxx_to_odom:
+  ros__parameters:
+    odom_frame: odom
+    base_frame: base_link
+    publish_tf: false
+
+    # Select AC vs RC throttle
+    switch_a_threshold: 1500.0
+
+    # Shared throttle → speed (v = gain*raw + offset), tune these:
+    positive_throttle_to_speed_gain: 0.0352        # example
+    negative_throttle_to_speed_gain: 0.0092
+    positive_throttle_to_speed_offset: -54.15
+    negative_throttle_to_speed_offset: -13.07
+    positive_throttle_deadband_value: 1545.0
+    negative_throttle_deadband_value: 1400.0
+
+    # Steering conversion, tune for your hardware:
+    steering_max_right: 1950.0
+    steering_max_left: 1000.0
+    steering_straight: 1490.0
+    steering_max_angle: 0.4014 # 23.7 degrees
+
+    wheelbase: 0.48 # alphatruck robot

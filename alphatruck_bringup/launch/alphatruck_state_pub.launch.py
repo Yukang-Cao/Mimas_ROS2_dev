@@ -177,15 +177,15 @@ def generate_launch_description():
         #mocap_tf_broadcaster_node,   # For world -> base_link
         
         # Sequential launch with time delay: Perception -> Laser Odom -> IMU -> EKF -> Planner
-        #perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
+        perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
         # TimerAction(
         #    period=5.0,
         #   actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
         #),
-        #TimerAction(
-        #    period=7.0,
-        #    actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
-        #),
+        TimerAction(
+           period=7.0,
+           actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
+        ),
         #TimerAction(
         #    period=8.0,
         #    actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
@@ -194,20 +194,20 @@ def generate_launch_description():
         #    period=9.0,
         #    actions=[test_goal_node]              # Step 5: Test goal publisher (t=9s)
         #),
-        #TimerAction(
-        #    period=7.5,
-         #   actions=[
-         #       Node(
-         #           package='xmaxx_bringup',
-         #           executable='xmaxx_interface_node',
-          #          name='xmaxx_interface_node',
-          #          output='screen',
-          #          parameters=[
-           #             {'use_sim_time': LaunchConfiguration('use_sim_time')}
-               #     ]
-           #     )
-         #   ]                                    # Step 5.5: Xmaxx hardware interface (t=9.5s)
-        #),
+        TimerAction(
+           period=7.5,
+           actions=[
+               Node(
+                   package='xmaxx_bringup',
+                   executable='xmaxx_interface_node',
+                   name='xmaxx_interface_node',
+                   output='screen',
+                   parameters=[
+                       {'use_sim_time': LaunchConfiguration('use_sim_time')}
+                   ]
+               )
+           ]                                    # Step 5.5: Xmaxx hardware interface (t=9.5s)
+        ),
         # TimerAction(
         #     period=10.0,
         #     actions=[local_planner_node]         # Step 6: Local planner (t=10s)

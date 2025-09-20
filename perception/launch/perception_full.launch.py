@@ -91,5 +91,21 @@ def generate_launch_description():
                     }]
                 )
             ]
+        ),
+
+        # Launch the dummy local costmap publisher (for testing controller without real LiDAR)
+        TimerAction(
+            period=1.0,  # 1 second delay
+            actions=[
+                Node(
+                    package='perception',
+                    executable='dummy_local_costmap_publisher',
+                    name='dummy_local_costmap_publisher',
+                    output='screen',
+                    parameters=[{
+                        'config_file_path': config_file_path,
+                    }]
+                )
+            ]
         )
     ])

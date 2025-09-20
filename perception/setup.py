@@ -26,6 +26,7 @@ setup(
             'costmap_processor_node = perception.costmap_processor_node:main',
             'test_goal_publisher = perception.test_goal_publisher:main',
             'dummy_odom_publisher = perception.dummy_odom_publisher:main',
+            'dummy_local_costmap_publisher = perception.dummy_local_costmap_publisher:main',
         ],
     },
 )

@@ -178,18 +178,35 @@ def generate_launch_description():
         # mocap_tf_broadcaster_node,   # For world -> base_link
         
         # Sequential launch with time delay: Perception -> Laser Odom -> IMU -> EKF -> Planner
-        perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
+        # perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
+        # TimerAction(
+        #    period=5.0,
+        #   actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
+        # ),
+        # TimerAction(
+        #    period=7.0,
+        #    actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
+        # ),
+        # TimerAction(
+        #    period=8.0,
+        #    actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
+        # ),
+        
+        # Launch dummy local costmap publisher for controller testing
         TimerAction(
-           period=5.0,
-          actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
-        ),
-        TimerAction(
-           period=7.0,
-           actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
-        ),
-        TimerAction(
-           period=8.0,
-           actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
+            period=1.0,
+            actions=[
+                Node(
+                    package='perception',
+                    executable='dummy_local_costmap_publisher',
+                    name='dummy_local_costmap_publisher',
+                    output='screen',
+                    parameters=[
+                        {'config_file_path': config_file_path},
+                        {'use_sim_time': LaunchConfiguration('use_sim_time')}
+                    ]
+                )
+            ]                                    # Step 1: Dummy costmap (t=1s)
         ),
         TimerAction(
             period=9.0,
