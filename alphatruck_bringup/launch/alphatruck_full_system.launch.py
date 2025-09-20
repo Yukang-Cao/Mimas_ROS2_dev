@@ -27,8 +27,9 @@ def generate_launch_description():
         # default_value='cu_mppi_map_conditioned_log',
         # default_value = 'cu_mppi_unsupervised_log',
         # default_value='mppi_pytorch',
-        default_value='log_mppi_pytorch',
-        description='The type of controller to use (e.g., mppi_pytorch, cu_mppi_unsupervised_std, cu_mppi_map_conditioned_std)'
+        # default_value='log_mppi_pytorch',
+        default_value='uge_mpc_pytorch',
+        description='The type of controller to use (e.g., uge_mpc_pytorch, mppi_pytorch, cu_mppi_unsupervised_std, cu_mppi_map_conditioned_std ...)'
     )
 
     control_frequency_arg = DeclareLaunchArgument(
@@ -174,22 +175,22 @@ def generate_launch_description():
         robot_state_publisher,       # For base_link -> lidar_link etc
         #static_tf_map_odom,
         # NOTE: dont' forget to start the mocap node if using this
-        mocap_tf_broadcaster_node,   # For world -> base_link
+        # mocap_tf_broadcaster_node,   # For world -> base_link
         
         # Sequential launch with time delay: Perception -> Laser Odom -> IMU -> EKF -> Planner
         perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
-        # TimerAction(
-        #    period=5.0,
-        #   actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
-        #),
-        #TimerAction(
-        #    period=7.0,
-        #    actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
-        #),
-        #TimerAction(
-        #    period=8.0,
-        #    actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
-        #),
+        TimerAction(
+           period=5.0,
+          actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
+        ),
+        TimerAction(
+           period=7.0,
+           actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
+        ),
+        TimerAction(
+           period=8.0,
+           actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
+        ),
         TimerAction(
             period=9.0,
             actions=[test_goal_node]              # Step 5: Test goal publisher (t=9s)

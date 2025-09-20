@@ -1,0 +1,41 @@
+<?xml version="1.0"?>
+<robot name="mimas">
+
+  <!-- Base link (robot body) -->
+  <link name="base_link"/>
+
+  <!-- RealSense camera link -->
+  <link name="camera_link"/>
+
+  <!-- IMU link -->
+  <link name="imu_link"/>
+
+  <!-- LiDAR link -->
+  <link name="lidar_link"/>
+
+  <!-- Joints -->
+
+  <!-- Joint between base_link and camera_link -->
+  <joint name="base_to_camera" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.212 0.0 0.097" rpy="0 0 0"/> 
+  </joint>
+
+  <!-- Joint between base_link and imu_link -->
+  <joint name="base_to_imu" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0.105 0.0 0.0" rpy="3.14 0 0"/>
+  </joint>
+
+  <!-- Joint between base_link lidar_link -->
+  <joint name="base_to_lidar" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.0 0.0 0.088" rpy="0 0 -1.57"/>
+  </joint>
+
+
+</robot>
+

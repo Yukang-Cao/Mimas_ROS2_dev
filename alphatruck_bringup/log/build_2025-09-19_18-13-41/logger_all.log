@@ -1,0 +1,92 @@
+[0.204s] DEBUG:colcon:Command line arguments: ['/usr/bin/colcon', 'build', '--packages-select', 'alphatruck_bringup']
+[0.204s] DEBUG:colcon:Parsed command line arguments: Namespace(log_base=None, log_level=None, verb_name='build', build_base='build', install_base='install', merge_install=False, symlink_install=False, test_result_base=None, continue_on_error=False, executor='parallel', parallel_workers=8, event_handlers=None, ignore_user_meta=False, metas=['./colcon.meta'], base_paths=['.'], packages_ignore=None, packages_ignore_regex=None, paths=None, packages_up_to=None, packages_up_to_regex=None, packages_above=None, packages_above_and_dependencies=None, packages_above_depth=None, packages_select_by_dep=None, packages_skip_by_dep=None, packages_skip_up_to=None, packages_select_build_failed=False, packages_skip_build_finished=False, packages_select_test_failures=False, packages_skip_test_passed=False, packages_select=['alphatruck_bringup'], packages_skip=None, packages_select_regex=None, packages_skip_regex=None, packages_start=None, packages_end=None, allow_overriding=[], cmake_args=None, cmake_target=None, cmake_target_skip_unavailable=False, cmake_clean_cache=False, cmake_clean_first=False, cmake_force_configure=False, ament_cmake_args=None, catkin_cmake_args=None, catkin_skip_building_tests=False, mixin_files=None, mixin=None, verb_parser=<colcon_mixin.mixin.mixin_argument.MixinArgumentDecorator object at 0xffffbd1044f0>, verb_extension=<colcon_core.verb.build.BuildVerb object at 0xffffbd2bdb10>, main=<bound method BuildVerb.main of <colcon_core.verb.build.BuildVerb object at 0xffffbd2bdb10>>, mixin_verb=('build',))
+[0.277s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) check parameters
+[0.277s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) check parameters
+[0.277s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) check parameters
+[0.277s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) check parameters
+[0.277s] Level 1:colcon.colcon_core.package_discovery:discover_packages(colcon_meta) discover
+[0.277s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) discover
+[0.278s] INFO:colcon.colcon_core.package_discovery:Crawling recursively for packages in '/home/alphatruck/ros2_ws/src/alphatruck_bringup'
+[0.278s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ignore', 'ignore_ament_install']
+[0.278s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore'
+[0.278s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ignore_ament_install'
+[0.278s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_pkg']
+[0.278s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_pkg'
+[0.278s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['colcon_meta']
+[0.278s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'colcon_meta'
+[0.279s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extensions ['ros']
+[0.279s] Level 1:colcon.colcon_core.package_identification:_identify(.) by extension 'ros'
+[0.329s] DEBUG:colcon.colcon_core.package_identification:Package '.' with type 'ros.ament_python' and name 'alphatruck_bringup'
+[0.329s] Level 1:colcon.colcon_core.package_discovery:discover_packages(recursive) using defaults
+[0.329s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) discover
+[0.329s] Level 1:colcon.colcon_core.package_discovery:discover_packages(ignore) using defaults
+[0.329s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) discover
+[0.329s] Level 1:colcon.colcon_core.package_discovery:discover_packages(path) using defaults
+[0.364s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) check parameters
+[0.364s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) discover
+[0.368s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 12 installed packages in /home/alphatruck/ros2_ws/install
+[0.369s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 2 installed packages in /home/alphatruck/ros2_ws/src/vectornav/install
+[0.372s] DEBUG:colcon.colcon_installed_package_information.package_discovery:Found 319 installed packages in /opt/ros/humble
+[0.374s] Level 1:colcon.colcon_core.package_discovery:discover_packages(prefix_path) using defaults
+[0.470s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'cmake_args' from command line to 'None'
+[0.470s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'cmake_target' from command line to 'None'
+[0.470s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'cmake_target_skip_unavailable' from command line to 'False'
+[0.470s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'cmake_clean_cache' from command line to 'False'
+[0.470s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'cmake_clean_first' from command line to 'False'
+[0.470s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'cmake_force_configure' from command line to 'False'
+[0.471s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'ament_cmake_args' from command line to 'None'
+[0.471s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'catkin_cmake_args' from command line to 'None'
+[0.471s] Level 5:colcon.colcon_core.verb:set package 'alphatruck_bringup' build argument 'catkin_skip_building_tests' from command line to 'False'
+[0.471s] DEBUG:colcon.colcon_core.verb:Building package 'alphatruck_bringup' with the following arguments: {'ament_cmake_args': None, 'build_base': '/home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup', 'catkin_cmake_args': None, 'catkin_skip_building_tests': False, 'cmake_args': None, 'cmake_clean_cache': False, 'cmake_clean_first': False, 'cmake_force_configure': False, 'cmake_target': None, 'cmake_target_skip_unavailable': False, 'install_base': '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup', 'merge_install': False, 'path': '/home/alphatruck/ros2_ws/src/alphatruck_bringup', 'symlink_install': False, 'test_result_base': None}
+[0.471s] INFO:colcon.colcon_core.executor:Executing jobs using 'parallel' executor
+[0.473s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete
+[0.473s] INFO:colcon.colcon_ros.task.ament_python.build:Building ROS package in '/home/alphatruck/ros2_ws/src/alphatruck_bringup' with build type 'ament_python'
+[0.474s] Level 1:colcon.colcon_core.shell:create_environment_hook('alphatruck_bringup', 'ament_prefix_path')
+[0.477s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_core.shell.bat': Not used on non-Windows systems
+[0.478s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/hook/ament_prefix_path.ps1'
+[0.479s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/hook/ament_prefix_path.dsv'
+[0.480s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/hook/ament_prefix_path.sh'
+[0.481s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.481s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[0.917s] WARNING:colcon.colcon_ros.task.ament_python.build:Package 'alphatruck_bringup' doesn't explicitly install a marker in the package index (colcon-ros currently does it implicitly but that fallback will be removed in the future)
+[0.917s] INFO:colcon.colcon_core.task.python.build:Building Python package in '/home/alphatruck/ros2_ws/src/alphatruck_bringup'
+[0.918s] INFO:colcon.colcon_core.shell:Skip shell extension 'powershell' for command environment: Not usable outside of PowerShell
+[0.918s] DEBUG:colcon.colcon_core.shell:Skip shell extension 'dsv' for command environment
+[1.693s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoking command in '/home/alphatruck/ros2_ws/src/alphatruck_bringup': CONDA_PROMPT_MODIFIER=(cu-mppi) PYTHONPATH=/home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/alphatruck_bringup build --build-base /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build install --record /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/install.log --single-version-externally-managed install_data
+[2.557s] DEBUG:colcon.colcon_core.event_handler.log_command:Invoked command in '/home/alphatruck/ros2_ws/src/alphatruck_bringup' returned '0': CONDA_PROMPT_MODIFIER=(cu-mppi) PYTHONPATH=/home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/alphatruck_bringup build --build-base /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build install --record /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/install.log --single-version-externally-managed install_data
+[2.562s] Level 1:colcon.colcon_core.environment:checking '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup' for CMake module files
+[2.562s] Level 1:colcon.colcon_core.environment:checking '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup' for CMake config files
+[2.564s] Level 1:colcon.colcon_core.environment:checking '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib'
+[2.565s] Level 1:colcon.colcon_core.environment:checking '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/bin'
+[2.565s] Level 1:colcon.colcon_core.environment:checking '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/pkgconfig/alphatruck_bringup.pc'
+[2.565s] Level 1:colcon.colcon_core.environment:checking '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages'
+[2.565s] Level 1:colcon.colcon_core.shell:create_environment_hook('alphatruck_bringup', 'pythonpath')
+[2.566s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/hook/pythonpath.ps1'
+[2.567s] INFO:colcon.colcon_core.shell:Creating environment descriptor '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/hook/pythonpath.dsv'
+[2.567s] INFO:colcon.colcon_core.shell:Creating environment hook '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/hook/pythonpath.sh'
+[2.568s] Level 1:colcon.colcon_core.environment:checking '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/bin'
+[2.568s] Level 1:colcon.colcon_core.environment:create_environment_scripts_only(alphatruck_bringup)
+[2.569s] INFO:colcon.colcon_core.shell:Creating package script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/package.ps1'
+[2.570s] INFO:colcon.colcon_core.shell:Creating package descriptor '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/package.dsv'
+[2.571s] INFO:colcon.colcon_core.shell:Creating package script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/package.sh'
+[2.573s] INFO:colcon.colcon_core.shell:Creating package script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/package.bash'
+[2.574s] INFO:colcon.colcon_core.shell:Creating package script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/package.zsh'
+[2.576s] Level 1:colcon.colcon_core.environment:create_file_with_runtime_dependencies(/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/colcon-core/packages/alphatruck_bringup)
+[2.577s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:closing loop
+[2.577s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:loop closed
+[2.577s] DEBUG:colcon.colcon_parallel_executor.executor.parallel:run_until_complete finished with '0'
+[2.578s] DEBUG:colcon.colcon_core.event_reactor:joining thread
+[2.588s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.terminal_notifier': Not used on non-Darwin systems
+[2.589s] INFO:colcon.colcon_core.plugin_system:Skipping extension 'colcon_notification.desktop_notification.win32': Not used on non-Windows systems
+[2.589s] INFO:colcon.colcon_notification.desktop_notification:Sending desktop notification using 'notify2'
+[2.628s] DEBUG:colcon.colcon_core.event_reactor:joined thread
+[2.629s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/local_setup.ps1'
+[2.632s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/_local_setup_util_ps1.py'
+[2.636s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/setup.ps1'
+[2.640s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/local_setup.sh'
+[2.641s] INFO:colcon.colcon_core.shell:Creating prefix util module '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/_local_setup_util_sh.py'
+[2.642s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/setup.sh'
+[2.646s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/local_setup.bash'
+[2.647s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/setup.bash'
+[2.650s] INFO:colcon.colcon_core.shell:Creating prefix script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/local_setup.zsh'
+[2.651s] INFO:colcon.colcon_core.shell:Creating prefix chain script '/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/setup.zsh'

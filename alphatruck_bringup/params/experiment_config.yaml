@@ -11,6 +11,7 @@ controllers_to_test:
   - "cu_mppi_unsupervised_log"
   - "mppi_pytorch"
   - "log_mppi_pytorch"
+  - "uge_mpc_pytorch"
   # - "cuniform_map_conditioned"
   # - "cuniform_unsupervised_openspace"
 
@@ -18,8 +19,8 @@ controllers_to_test:
 global_map_resolution: 0.05   # global map grid resolution (meters/cell)
 
 # Planning Parameters
-horizon_T: 6.0                # Planning horizon in seconds
-dt: 0.20                      # Simulation timestep (affects all controllers)
+horizon_T: 3.0                # Planning horizon in seconds
+dt: 0.10                      # Simulation timestep (affects all controllers)
 seed: 2025                    # Random seed for reproducibility
 
 # Sampling parameters 
@@ -72,8 +73,8 @@ robot_body_filter_radius: 0.2   # Radius around robot center to ignore LiDAR poi
 # Visualization Configuration
 #===============================================================================
 visualization:
-  enabled: False                 # Master switch
-  visualize_trajectories: False  # Enable/disable trajectory visualization (saves significant time if false)
+  enabled: True                 # Master switch
+  visualize_trajectories: True  # Enable/disable trajectory visualization (saves significant time if false)
   visualize_goal: True          # Enable/disable local goal visualization
 
 #===============================================================================
@@ -147,3 +148,56 @@ mppi_controller:
   # MPPI algorithm parameters
   lambda_weight: 0.01      # Temperature parameter for importance weighting
   num_opt: 1              # Number of optimization iterations per solve 
+
+# ========================================
+# UGE-MPC CONTROLLER CONFIGURATION
+# ========================================
+uge_mpc_controller:
+  # --- UGE-TO Initialization Stage (Algorithm 1) ---
+  uge_to:
+    # N: Number of diverse trajectories maintained
+    num_trajectories: 10 # (self.trajs in Numba)
+    # M: Candidates generated per trajectory during refinement
+    candidates_per_traj: 12 # (self.candidates_per_traj in Numba)
+    
+    # Iterations for refinement
+    iterations: 10 # (self.iters in Numba)
+    
+    # Optimization parameters
+    step_interval: 10    # Calculate Hellinger distance every K steps
+    decay_sharpness: 2.0 # Controls the noise decay schedule
+
+  # --- Noise Parameters (Crucial for UGE-TO) ---
+  noise:
+    # R (Sigma_u): Action sampling covariance (std dev) [v_std, delta_std]
+    # Used for sampling perturbations in UGE-TO and MPPI.
+    # Example matching Numba R_val=[0.5, 5.0 deg] (R_val in Numba seems to be STD)
+    R_std: [0.5, 0.087266] 
+    
+    # Q: Propagation input noise covariance (std dev) [v_std, delta_std]
+    # Used in the EKF update (B Q B^T).
+    # Example matching Numba Q_val=[0.05, 1.0 deg] (Q_val in Numba seems to be STD)
+    Q_std: [0.05, 0.017453] 
+    
+    # Sigma0: Initial state covariance (std dev) [x_std, y_std, theta_std]
+    # Example matching Numba Sigma0_val=[0.001, 0.001, 0.001]
+    Sigma0_std: [0.001, 0.001, 0.001] 
+
+  # --- MPPI Refinement Stage (Algorithm 2, Stage 3) ---
+  mppi:
+    # L: Number of rollouts for MPPI refinement
+    num_rollouts: 128 # (num_rollouts in Numba generate_rollouts call)
+    
+    # Configuration for the MPPI refiner instance
+    # This structure mirrors the standard 'mppi_controller' config block
+    refinement_config:
+      mppi_type: 0  # Standard Gaussian MPPI
+      
+      # Control noise parameters for MPPI stage (Sigma_u).
+      # Typically linked to R_std defined above.
+      u_std: [0.5, 0.087266] 
+
+      # MPPI algorithm parameters
+      # Example matching Numba lambda_weight=0.001 in solve_mppi_only_with_total_cost
+      lambda_weight: 0.001
+      num_opt: 1

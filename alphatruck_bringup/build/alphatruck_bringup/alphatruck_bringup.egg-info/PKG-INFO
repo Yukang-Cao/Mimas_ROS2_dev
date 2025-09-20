@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: alphatruck_bringup
+Version: 1.0.0
+Summary: Bringup package for Alphatruck
+Maintainer: alphatruck
+Maintainer-email: cao00125@umn.edu
+License: TODO: License declaration
+Requires-Dist: setuptools
+Dynamic: license
+Dynamic: maintainer
+Dynamic: maintainer-email
+Dynamic: requires-dist
+Dynamic: summary

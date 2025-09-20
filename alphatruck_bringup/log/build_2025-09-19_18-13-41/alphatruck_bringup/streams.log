@@ -1,0 +1,44 @@
+[1.219s] Invoking command in '/home/alphatruck/ros2_ws/src/alphatruck_bringup': CONDA_PROMPT_MODIFIER=(cu-mppi) PYTHONPATH=/home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/alphatruck_bringup build --build-base /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build install --record /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/install.log --single-version-externally-managed install_data
+[1.730s] running egg_info
+[1.761s] creating build/alphatruck_bringup/alphatruck_bringup.egg-info
+[1.762s] writing build/alphatruck_bringup/alphatruck_bringup.egg-info/PKG-INFO
+[1.762s] writing dependency_links to build/alphatruck_bringup/alphatruck_bringup.egg-info/dependency_links.txt
+[1.763s] writing requirements to build/alphatruck_bringup/alphatruck_bringup.egg-info/requires.txt
+[1.763s] writing top-level names to build/alphatruck_bringup/alphatruck_bringup.egg-info/top_level.txt
+[1.764s] writing manifest file 'build/alphatruck_bringup/alphatruck_bringup.egg-info/SOURCES.txt'
+[1.830s] reading manifest file 'build/alphatruck_bringup/alphatruck_bringup.egg-info/SOURCES.txt'
+[1.833s] writing manifest file 'build/alphatruck_bringup/alphatruck_bringup.egg-info/SOURCES.txt'
+[1.833s] running build
+[1.833s] running build_py
+[1.833s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build/lib/alphatruck_bringup
+[1.834s] copying alphatruck_bringup/__init__.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build/lib/alphatruck_bringup
+[1.834s] running install
+[1.842s] running install_lib
+[1.875s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup
+[1.876s] copying /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build/lib/alphatruck_bringup/__init__.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup
+[1.877s] byte-compiling /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup/__init__.py to __init__.cpython-310.pyc
+[1.877s] running install_data
+[1.878s] copying package.xml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup
+[1.878s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/launch
+[1.878s] copying launch/alphatruck_semi_system.launch.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/launch
+[1.879s] copying launch/alphatruck_full_system.launch.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/launch
+[1.879s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/config
+[1.879s] copying config/alphatruck_online_async.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/config
+[1.879s] copying config/ekf.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/config
+[1.880s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/params
+[1.880s] copying params/experiment_config_goktug.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/params
+[1.880s] copying params/experiment_config.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/params
+[1.881s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/urdf
+[1.881s] copying urdf/alphatruck.urdf -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/urdf
+[1.881s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource
+[1.881s] copying resource/alphatruck_bringup -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource
+[1.881s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/map_conditioned_cuniform_models_v2.5
+[1.882s] copying resource/map_conditioned_cuniform_models_v2.5/best_model.pth -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/map_conditioned_cuniform_models_v2.5
+[1.913s] copying resource/map_conditioned_cuniform_models_v2.5/best_feature_extractor.pth -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/map_conditioned_cuniform_models_v2.5
+[1.925s] creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/unsupervised_cuniform_model_v2.5
+[1.925s] copying resource/unsupervised_cuniform_model_v2.5/MapAct_best_model_single_env.pt -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/unsupervised_cuniform_model_v2.5
+[1.927s] running install_egg_info
+[1.962s] Copying build/alphatruck_bringup/alphatruck_bringup.egg-info to /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup-1.0.0-py3.10.egg-info
+[1.963s] running install_scripts
+[2.029s] writing list of installed files to '/home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/install.log'
+[2.083s] Invoked command in '/home/alphatruck/ros2_ws/src/alphatruck_bringup' returned '0': CONDA_PROMPT_MODIFIER=(cu-mppi) PYTHONPATH=/home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base build/alphatruck_bringup build --build-base /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build install --record /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/install.log --single-version-externally-managed install_data

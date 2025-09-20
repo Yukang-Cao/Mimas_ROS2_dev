@@ -23,7 +23,8 @@ class TestGoalPublisher(Node):
         """Publish a test goal pose in base_link frame for testing."""
         goal_msg = PoseStamped()
         goal_msg.header.stamp = self.get_clock().now().to_msg()
-        goal_msg.header.frame_id = "world"
+        # goal_msg.header.frame_id = "world"
+        goal_msg.header.frame_id = "base_link"
         
         # Create different goal positions for testing
         goals = [

@@ -1,0 +1,42 @@
+running egg_info
+creating build/alphatruck_bringup/alphatruck_bringup.egg-info
+writing build/alphatruck_bringup/alphatruck_bringup.egg-info/PKG-INFO
+writing dependency_links to build/alphatruck_bringup/alphatruck_bringup.egg-info/dependency_links.txt
+writing requirements to build/alphatruck_bringup/alphatruck_bringup.egg-info/requires.txt
+writing top-level names to build/alphatruck_bringup/alphatruck_bringup.egg-info/top_level.txt
+writing manifest file 'build/alphatruck_bringup/alphatruck_bringup.egg-info/SOURCES.txt'
+reading manifest file 'build/alphatruck_bringup/alphatruck_bringup.egg-info/SOURCES.txt'
+writing manifest file 'build/alphatruck_bringup/alphatruck_bringup.egg-info/SOURCES.txt'
+running build
+running build_py
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build/lib/alphatruck_bringup
+copying alphatruck_bringup/__init__.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build/lib/alphatruck_bringup
+running install
+running install_lib
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup
+copying /home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/build/lib/alphatruck_bringup/__init__.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup
+byte-compiling /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup/__init__.py to __init__.cpython-310.pyc
+running install_data
+copying package.xml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/launch
+copying launch/alphatruck_semi_system.launch.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/launch
+copying launch/alphatruck_full_system.launch.py -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/launch
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/config
+copying config/alphatruck_online_async.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/config
+copying config/ekf.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/config
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/params
+copying params/experiment_config_goktug.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/params
+copying params/experiment_config.yaml -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/params
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/urdf
+copying urdf/alphatruck.urdf -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/urdf
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource
+copying resource/alphatruck_bringup -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/map_conditioned_cuniform_models_v2.5
+copying resource/map_conditioned_cuniform_models_v2.5/best_model.pth -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/map_conditioned_cuniform_models_v2.5
+copying resource/map_conditioned_cuniform_models_v2.5/best_feature_extractor.pth -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/map_conditioned_cuniform_models_v2.5
+creating /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/unsupervised_cuniform_model_v2.5
+copying resource/unsupervised_cuniform_model_v2.5/MapAct_best_model_single_env.pt -> /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/share/alphatruck_bringup/resource/unsupervised_cuniform_model_v2.5
+running install_egg_info
+Copying build/alphatruck_bringup/alphatruck_bringup.egg-info to /home/alphatruck/ros2_ws/src/alphatruck_bringup/install/alphatruck_bringup/lib/python3.10/site-packages/alphatruck_bringup-1.0.0-py3.10.egg-info
+running install_scripts
+writing list of installed files to '/home/alphatruck/ros2_ws/src/alphatruck_bringup/build/alphatruck_bringup/install.log'

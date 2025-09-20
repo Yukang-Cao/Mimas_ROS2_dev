@@ -32,6 +32,7 @@ import torch
 # If using the provided directory structure, ensure your setup.py includes the 'lib' directory.
 from controllers.lib.mppi_pytorch_controller import MPPIPyTorchController
 from controllers.lib.nn_cuniform_controller import CUniformController
+from controllers.lib.uge_mpc_controller import UGEMPCController
 from controllers.lib.cu_mppi_controller import CUMPPiController
 from controllers.lib.base_controller import PlannerInput
 
@@ -101,7 +102,7 @@ class LocalPlannerNode(Node):
                 rclpy.try_shutdown()
                 return
 
-        # --- State Variables ---j
+        # --- State Variables ---
         self.current_velocity = 0.0
         self.global_goal = None
         self.latest_costmap_msg = None
@@ -114,8 +115,11 @@ class LocalPlannerNode(Node):
 
         # --- Subscribers ---
         sensor_qos = QoSProfile(reliability=ReliabilityPolicy.BEST_EFFORT, history=HistoryPolicy.KEEP_LAST, depth=1)
-        # self.create_subscription(Odometry, '/odometry/filtered', self.odom_callback, sensor_qos)
-        self.create_subscription(TwistStamped, '/vrpn_mocap/titan_alphatruck/twist', self.twist_callback, sensor_qos)
+
+        # NOTE: select one of the following two subscriptions, Vicon in indoor and ekf odom in outdoor
+        self.create_subscription(Odometry, '/odometry/filtered', self.odom_callback, sensor_qos) 
+        # self.create_subscription(TwistStamped, '/vrpn_mocap/titan_alphatruck/twist', self.twist_callback, sensor_qos)
+
         self.create_subscription(PoseStamped, '/goal_pose', self.goal_callback, 10)
         self.create_subscription(OccupancyGrid, '/local_costmap_inflated', self.costmap_callback, sensor_qos)
         
@@ -196,6 +200,7 @@ class LocalPlannerNode(Node):
                 CUMPPiController, "cuniform_controller",
                 {"type_override": 1, "mppi_type_override": 1, "mppi_config": mppi_cfg}
             ),
+            "uge_mpc_pytorch": (UGEMPCController, "uge_mpc_controller", {"mppi_config": mppi_cfg}),
         }
 
         if self.controller_type not in CONTROLLER_FACTORY:
@@ -267,20 +272,20 @@ class LocalPlannerNode(Node):
         start_time = time.monotonic()
         if not self.is_ready():
             # Waiting for data, do not necessarily stop the robot yet.
-            self.get_logger().info("Control loop not ready - waiting for goal, costmap, or SDF", throttle_duration_sec=5.0)
+            # Detailed status is already logged in is_ready()
             return
 
         # 1. Transform Goal
         local_goal_np = self.transform_goal_to_local()
         if local_goal_np is None:
             self.publish_stop_command()
-            self.get_logger().error("Failed to transform goal. Stopping robot.", throttle_duration_sec=1.0)
+            self.get_logger().error("\033[91mFailed to transform goal. Stopping robot.\033[0m", throttle_duration_sec=1.0)
             return
 
         # 2. Prepare Inputs (Costmap and SDF)
         planner_input = self.prepare_planner_input(local_goal_np)
         if planner_input is None:
-            self.get_logger().error("Failed to prepare planner input (Costmap/SDF invalid or mismatch). Stopping robot.", throttle_duration_sec=1.0)
+            self.get_logger().error("\033[91mFailed to prepare planner input (Costmap/SDF invalid or mismatch). Stopping robot.\033[0m", throttle_duration_sec=1.0)
             self.publish_stop_command()
             return
 
@@ -289,7 +294,7 @@ class LocalPlannerNode(Node):
         try:
             control_action, info = self.controller.get_control_action(planner_input)
         except Exception as e:
-            self.get_logger().error(f"Runtime error during planning step: {e}", throttle_duration_sec=1.0)
+            self.get_logger().error(f"\033[91mRuntime error during planning step: {e}\033[0m", throttle_duration_sec=1.0)
             traceback.print_exc()
             self.publish_stop_command()
             return
@@ -329,15 +334,42 @@ class LocalPlannerNode(Node):
 
     def is_ready(self):
         """Checks if all necessary inputs are available."""
+        missing_components = []
+        
         if self.global_goal is None:
-            self.get_logger().info("Waiting for goal (/goal_pose)...", throttle_duration_sec=5.0)
-            return False
+            missing_components.append("goal (/goal_pose)")
+        
         if self.latest_costmap_msg is None:
-            self.get_logger().info("Waiting for local costmap...", throttle_duration_sec=5.0)
+            missing_components.append("local costmap (/local_costmap_inflated)")
+        
+        # Check SDF requirement based on controller type
+        sdf_needed = self.requires_sdf and self.use_external_sdf
+        if sdf_needed and self.latest_sdf_msg is None:
+            missing_components.append("SDF from perception (/local_costmap_sdf)")
+        
+        if missing_components:
+            # Create detailed status message
+            status_parts = []
+            status_parts.append(f"Controller: {self.controller_type}")
+            status_parts.append(f"Requires SDF: {self.requires_sdf}")
+            status_parts.append(f"Use external SDF: {self.use_external_sdf}")
+            
+            # Add received status for each component
+            status_parts.append(f"Goal received: {'✓' if self.global_goal is not None else '✗'}")
+            status_parts.append(f"Costmap received: {'✓' if self.latest_costmap_msg is not None else '✗'}")
+            if sdf_needed:
+                status_parts.append(f"SDF received: {'✓' if self.latest_sdf_msg is not None else '✗'}")
+            
+            missing_str = ", ".join(missing_components)
+            status_str = " | ".join(status_parts)
+            
+            self.get_logger().info(
+                f"\033[91mControl loop not ready - Missing: {missing_str}\033[0m\n"
+                f"\033[93mStatus: {status_str}\033[0m", 
+                throttle_duration_sec=2.0
+            )
             return False
-        if self.requires_sdf and self.use_external_sdf and self.latest_sdf_msg is None:
-            self.get_logger().info("Waiting for SDF from perception...", throttle_duration_sec=5.0)
-            return False
+        
         return True
 
     def transform_goal_to_local(self):
