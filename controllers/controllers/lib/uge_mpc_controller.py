@@ -11,23 +11,237 @@ import time
 from .torch_planner_base import TorchPlannerBase, PlannerInput
 from .mppi_pytorch_controller import MPPIPyTorchController
 
+# Import Numba CUDA for optimized kernels
+try:
+    from numba import cuda
+    import numpy as anp # Used for types/constants in Numba kernels
+except ImportError:
+    print("WARNING: Numba not found or CUDA not supported. UGE-MPC optimized CUDA kernels will be disabled. Performance will be degraded.")
+    cuda = None
+
 # =================================================================================
 # JIT Compiled Optimization Kernels (Replicating Numba optimizations)
 # =================================================================================
 
-# OPTIMIZATION: Renamed from _hellinger_3d_batch_jit_unrolled.
-# Modified to return the full H_sq tensor (C, K, S) for use in vectorized scoring.
+# ---------------------------------------------------------------------------------
+# (NEW) Custom Numba CUDA Kernel for Fused Propagation
+# ---------------------------------------------------------------------------------
+if cuda is not None:
+    @cuda.jit(fastmath=True)
+    def propagation_kernel_numba_cuda(
+        initial_state_batch,  # (B, nx)
+        action_seqs_cont,     # (B, T, nu)
+        Sigma0_batch,         # (B, nx, nx)
+        Q_diag_cont,          # (nu,)
+        trajs_out,            # (B, T+1, nx)
+        covs_out,             # (B, T+1, nx, nx)
+        dt, L, T, B, nx, nu
+    ):
+        """
+        (OPTIMIZED) Custom CUDA kernel for fused Mean and Covariance propagation.
+        Structure: Parallel(B) -> Sequential(T).
+        This eliminates the overhead of sequentially launching small PyTorch kernels
+        and exactly mirrors the parallelism and dynamics (Standard Euler) of the original Numba CPU implementation.
+        """
+        # Parallelize over the batch dimension B
+        b = cuda.grid(1)
+        
+        if b >= B:
+            return
+
+        # Define constants
+        # pi = 3.141592653589793
+        two_pi = 6.283185307179586
+
+        # Load Q_diag into registers (assuming nu=2)
+        q0 = Q_diag_cont[0]
+        q1 = Q_diag_cont[1]
+
+        # Use local arrays (registers/fast memory) for the state and covariance being propagated
+        M = cuda.local.array(3, dtype=anp.float32)
+        S = cuda.local.array((3, 3), dtype=anp.float32)
+        
+        # Initialize M and S from global memory
+        for i in range(nx):
+            M[i] = initial_state_batch[b, i]
+        
+        for i in range(nx):
+            for j in range(nx):
+                S[i, j] = Sigma0_batch[b, i, j]
+
+        # Store initial state and covariance in output tensors
+        for i in range(nx):
+            trajs_out[b, 0, i] = M[i]
+        for i in range(nx):
+            for j in range(nx):
+                covs_out[b, 0, i, j] = S[i, j]
+
+        # Sequential Update Loop (T)
+        for t in range(T):
+            # --- 1. Extract inputs and current state ---
+            V = action_seqs_cont[b, t, 0]
+            Delta = action_seqs_cont[b, t, 1]
+            
+            X = M[0]; Y = M[1]; Theta = M[2]
+
+            # --- 2. Mean Propagation (Mirroring propagate_batch_numba: Standard Euler) ---
+            CosTh = math.cos(Theta)
+            SinTh = math.sin(Theta)
+            TanDelta = math.tan(Delta)
+
+            # Standard Euler Update
+            X_new = X + dt * V * CosTh
+            Y_new = Y + dt * V * SinTh
+            Theta_new = Theta + dt * V / L * TanDelta
+            
+            # Normalize theta (Mirroring propagate_batch_numba: np.fmod(th, 2*np.pi))
+            # fmod ensures the result has the same sign as the dividend.
+            Theta_norm = math.fmod(Theta_new, two_pi)
+
+            M[0] = X_new
+            M[1] = Y_new
+            M[2] = Theta_norm
+            
+            # Store trajectory
+            for i in range(nx):
+                trajs_out[b, t+1, i] = M[i]
+
+            # --- 3. Covariance Propagation (Mirroring propagate_uncertainty_batch_numba_fast) ---
+            
+            # Calculate Jacobians (Standard Euler Linearization)
+            A02_t = -dt * V * SinTh
+            A12_t = dt * V * CosTh
+
+            b00 = dt * CosTh
+            b10 = dt * SinTh
+            b20 = dt * TanDelta / L
+            
+            CosDelta = math.cos(Delta)
+            # Numba CPU implementation does not clamp CosDeltaSq.
+            CosDeltaSq = CosDelta * CosDelta
+            # Add a small epsilon for numerical stability if CosDeltaSq is close to zero
+            if abs(CosDeltaSq) < 1e-9:
+                CosDeltaSq = 1e-9 if CosDeltaSq >= 0 else -1e-9
+                
+            b21 = dt * V / (L * CosDeltaSq)
+
+            # --- EKF Update (Element-wise, optimized) ---
+
+            # Load S components from local array S
+            S00 = S[0, 0]; S01 = S[0, 1]; S02 = S[0, 2]
+            S10 = S[1, 0]; S11 = S[1, 1]; S12 = S[1, 2]
+            S20 = S[2, 0]; S21 = S[2, 1]; S22 = S[2, 2]
+
+            # Calculate N components (N = S + ES + SE^T + ESE^T + BQB^T)
+
+            # Initialize N = S
+            N00 = S00; N01 = S01; N02 = S02
+            N10 = S10; N11 = S11; N12 = S12
+            N20 = S20; N21 = S21; N22 = S22
+
+            # E S
+            N00 += A02_t * S20;  N01 += A02_t * S21;  N02 += A02_t * S22
+            N10 += A12_t * S20;  N11 += A12_t * S21;  N12 += A12_t * S22
+
+            # S E^T
+            N00 += A02_t * S02;  N10 += A02_t * S12;  N20 += A02_t * S22
+            N01 += A12_t * S02;  N11 += A12_t * S12;  N21 += A12_t * S22
+
+            # E S E^T (only top-left 2x2)
+            add = S22
+            N00 += A02_t * A02_t * add
+            N01 += A02_t * A12_t * add
+            N10 += A12_t * A02_t * add
+            N11 += A12_t * A12_t * add
+
+            # B Q B^T
+            qb00 = q0 * b00 * b00; qb01 = q0 * b00 * b10; qb02 = q0 * b00 * b20
+            qb10 = q0 * b10 * b00; qb11 = q0 * b10 * b10; qb12 = q0 * b10 * b20
+            qb20 = q0 * b20 * b00; qb21 = q0 * b20 * b10; qb22 = q0 * b20 * b20
+            N00 += qb00; N01 += qb01; N02 += qb02
+            N10 += qb10; N11 += qb11; N12 += qb12
+            N20 += qb20; N21 += qb21; N22 += qb22
+            N22 += q1 * b21 * b21  # q1 term
+
+            # Write back to local array S
+            S[0, 0] = N00; S[0, 1] = N01; S[0, 2] = N02
+            S[1, 0] = N10; S[1, 1] = N11; S[1, 2] = N12
+            S[2, 0] = N20; S[2, 1] = N21; S[2, 2] = N22
+
+            # Store covariance in output tensor
+            covs_out[b, t+1, 0, 0] = N00; covs_out[b, t+1, 0, 1] = N01; covs_out[b, t+1, 0, 2] = N02
+            covs_out[b, t+1, 1, 0] = N10; covs_out[b, t+1, 1, 1] = N11; covs_out[b, t+1, 1, 2] = N12
+            covs_out[b, t+1, 2, 0] = N20; covs_out[b, t+1, 2, 1] = N21; covs_out[b, t+1, 2, 2] = N22
+
+    def _propagate_mean_and_covariance_custom_cuda(
+        initial_state: torch.Tensor, 
+        action_seqs: torch.Tensor,
+        Sigma0_cov: torch.Tensor,
+        Q_diag: torch.Tensor,
+        dt: float, L: float, nx: int, nu: int, device: torch.device
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Wrapper function to launch the Numba CUDA kernel from PyTorch."""
+        
+        if cuda is None:
+            # This should be caught by the initialization logic, but acts as a safeguard.
+            raise RuntimeError("Numba CUDA not available but custom kernel was called.")
+
+        B, T, _ = action_seqs.shape
+
+        # Ensure inputs are contiguous and in the correct shape for the kernel
+        # initial_state needs to be expanded to batch size B if it's (nx,) or (1, nx)
+        if initial_state.dim() == 1:
+            initial_state_batch = initial_state.unsqueeze(0).expand(B, -1).contiguous()
+        elif initial_state.dim() == 2:
+            if initial_state.shape[0] == 1 and B > 1:
+                 initial_state_batch = initial_state.expand(B, -1).contiguous()
+            elif initial_state.shape[0] == B:
+                 initial_state_batch = initial_state.contiguous()
+            else:
+                 raise ValueError(f"initial_state shape {initial_state.shape} incompatible with batch size {B}")
+        else:
+            raise ValueError("initial_state must be 1D or 2D tensor")
+
+        # Sigma0_cov needs to be expanded to batch size B
+        if B > 1:
+             Sigma0_batch = Sigma0_cov.unsqueeze(0).expand(B, -1, -1).contiguous()
+        else:
+             # Ensure it is 3D (1, nx, nx)
+             Sigma0_batch = Sigma0_cov.unsqueeze(0).contiguous()
+
+        action_seqs_cont = action_seqs.contiguous()
+        Q_diag_cont = Q_diag.contiguous()
+
+        # Initialize output tensors
+        trajs_out = torch.empty(B, T + 1, nx, device=device, dtype=torch.float32)
+        covs_out = torch.empty(B, T + 1, nx, nx, device=device, dtype=torch.float32)
+
+        # Configure the kernel launch
+        threads_per_block = 256 # Optimized for typical GPU architectures
+        blocks_per_grid = (B + threads_per_block - 1) // threads_per_block
+
+        # Launch the kernel
+        # Numba automatically handles the conversion of PyTorch tensors via __cuda_array_interface__
+        propagation_kernel_numba_cuda[blocks_per_grid, threads_per_block](
+            initial_state_batch,
+            action_seqs_cont,
+            Sigma0_batch,
+            Q_diag_cont,
+            trajs_out,
+            covs_out,
+            dt, L, T, B, nx, nu
+        )
+        
+        # No explicit synchronization needed, PyTorch manages it.
+        return trajs_out, covs_out
+
+# ---------------------------------------------------------------------------------
+# (Existing) JIT Kernels (Hellinger, Scoring, Fallback Propagation)
+# ---------------------------------------------------------------------------------
 @torch.jit.script
 def _hellinger_3d_kernel_internal_jit(mu_c: torch.Tensor, Sig_c: torch.Tensor, mu_o: torch.Tensor, Sig_o: torch.Tensor) -> torch.Tensor:
     """
     Fast, JIT-compiled 3D Hellinger^2 calculation using manual 3x3 determinant/inverse.
-    This mirrors the optimized Numba implementation (hellinger_3d_batch_numba_fast).
-    
-    Inputs:
-      mu_c: (C, S, nx), Sig_c: (C, S, nx, nx)
-      mu_o: (K, S, nx), Sig_o: (K, S, nx, nx)
-    Returns:
-      H_sq: (C, K, S) - The squared Hellinger distance for every combination.
     """
     # Epsilon matching Numba implementation's float32 precision considerations
     eps = torch.tensor(1e-9, dtype=torch.float32, device=mu_c.device) 
@@ -141,7 +355,6 @@ def _hellinger_3d_kernel_internal_jit(mu_c: torch.Tensor, Sig_c: torch.Tensor, m
     # 10. Return H_sq (C, K, S)
     return H_sq
 
-# OPTIMIZATION: New JIT kernel for vectorized scoring and selection
 @torch.jit.script
 def _score_and_select_vectorized_jit(
     mu_c_all: torch.Tensor, Si_c_all: torch.Tensor,
@@ -150,11 +363,7 @@ def _score_and_select_vectorized_jit(
     N: int, M: int,
     mask: torch.Tensor
 ) -> torch.Tensor:
-    """
-    Fully vectorized and JIT-compiled scoring and selection process.
-    Eliminates the Python loop over N-1 trajectories by batching the Hellinger calculation
-    and using a mask to exclude self-comparisons. This significantly improves GPU utilization.
-    """
+    """ Fully vectorized and JIT-compiled scoring and selection process.  """
     # N: Total number of base trajectories
     # M: Candidates per trajectory
 
@@ -192,87 +401,155 @@ def _score_and_select_vectorized_jit(
     selected_actions = cand_all_flat[best_m_indices_global]
     return selected_actions
 
+# (Fallback/Legacy) PyTorch JIT Propagation Kernel
+# This is kept only as a fallback if Numba CUDA is unavailable.
+# (REVISED) Updated to use Standard Euler dynamics and fmod wrapping for consistency.
 @torch.jit.script
-def _propagate_covariance_jit_optimized(
-    T: int, B: int, nx: int,
-    a02_T: torch.Tensor, # (T, B)
-    a12_T: torch.Tensor, # (T, B)
-    BQB_T: torch.Tensor, # (T, B, nx, nx)
-    Sigma0_batch: torch.Tensor,
+def _propagate_unified_JIT_fallback(
+    T: int, B: int, nx: int, nu: int,
+    initial_state: torch.Tensor, # (nx,) or (1, nx)
+    action_seqs_T: torch.Tensor, # (T, B, nu)
+    Sigma0_batch: torch.Tensor,  # (B, nx, nx)
+    Q_diag: torch.Tensor,        # (nu,) diagonal elements of Q
+    dt: float,
+    L: float, # wheelbase
     device: torch.device
-) -> torch.Tensor:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
-    JIT-compiled EKF propagation loop using explicit element-wise expansion (A=I+E).
-    Optimized memory layout (T, B, ...) and removal of clones inside the loop.
+    (FALLBACK PyTorch JIT) Fused Mean (Standard Euler) and EKF Covariance propagation.
+    This implementation is slower than the custom Numba CUDA kernel for small B and large T due to sequential kernel launches.
     """
-    # Initialize covariances storage (T+1, B, nx, nx) for efficient access
-    covs = torch.zeros(T + 1, B, nx, nx, device=device, dtype=torch.float32)
-    covs[0] = Sigma0_batch
+    # Initialize storage (T+1, B, ...)
+    trajs = torch.empty(T + 1, B, nx, device=device, dtype=torch.float32)
+    # Use coalesced layout for covariance (nx, nx, T+1, B) to optimize memory access
+    covs_coalesced = torch.empty(nx, nx, T + 1, B, device=device, dtype=torch.float32)
 
-    # current_Sigma (S) initialization (B, nx, nx). Clone is crucial.
-    S = Sigma0_batch.clone()
-
-    # Optimized Update Loop (JIT Compiled) - Optimized memory layout and no clones inside loop
-    for t in range(T):
-        # Extract Jacobians and Noise for time t (B,). Contiguous access.
-        A02_t = a02_T[t]
-        A12_t = a12_T[t]
-        BQB_t = BQB_T[t]
-
-        # Load S components (Views). We assume symmetry S01=S10, S02=S20, S12=S21.
-        S00 = S[:, 0, 0]; S01 = S[:, 0, 1]; S02 = S[:, 0, 2]
-        S11 = S[:, 1, 1]; S12 = S[:, 1, 2]
-        S22 = S[:, 2, 2]
-
-        # Calculate N components (New Tensors, NO CLONE, NO IN-PLACE modification of S yet)
+    # Prepare initial states M (B, nx)
+    if initial_state.dim() == 1:
+        M = initial_state.unsqueeze(0).expand(B, -1)
+    elif initial_state.dim() == 2:
+        if initial_state.shape[0] == 1 and B > 1:
+             M = initial_state.expand(B, -1)
+        else:
+             M = initial_state
+    else:
+        M = torch.empty(B, nx, device=device, dtype=torch.float32)
         
-        # --- ES terms (using symmetry S20=S02, S21=S12) ---
-        # E = [[0, 0, a02], [0, 0, a12], [0, 0, 0]]
+    M = M.clone()
+
+    # Initialize S using Coalesced Layout (nx, nx, B)
+    S = Sigma0_batch.permute(1, 2, 0).contiguous()
+
+    trajs[0] = M
+    covs_coalesced[:, :, 0, :] = S 
+
+    # Setup constants
+    q0 = Q_diag[0]; q1 = Q_diag[1]
+    eps = torch.tensor(1e-9, device=device, dtype=torch.float32) # Increased epsilon for stability
+    # pi = math.pi
+    two_pi = 2 * math.pi
+
+    # Fused Update Loop
+    for t in range(T):
+        # --- 1. Extract inputs and current state ---
+        U_t = action_seqs_T[t] # (B, nu)
+        V = U_t[:, 0]; Delta = U_t[:, 1]
+        X = M[:, 0]; Y = M[:, 1]; Theta = M[:, 2]
+
+        # Pre-calculate trigonometric functions
+        TanDelta = torch.tan(Delta)
+        CosDelta = torch.cos(Delta)
+        # Use clamp for stability in JIT version matching the CUDA kernel stability check.
+        CosDeltaSq = torch.clamp(CosDelta**2, min=eps) 
+        SinTh = torch.sin(Theta); CosTh = torch.cos(Theta)
+
+        # --- 2. Mean Propagation (Standard Euler - Matching Numba) ---
+        
+        # Update X, Y using the OLD theta
+        M[:, 0] = X + V * CosTh * dt
+        M[:, 1] = Y + V * SinTh * dt
+        
+        # Update Theta
+        Theta_new = Theta + (V / L) * TanDelta * dt
+        # Angle wrapping: Matching Numba's wrap (fmod(th, 2*pi))
+        Theta_wrapped = torch.fmod(Theta_new, two_pi)
+        M[:, 2] = Theta_wrapped
+        
+        trajs[t+1] = M
+
+        # --- 3. Covariance Propagation (EKF - Consistent Standard Euler) ---
+        
+        # Calculate Jacobians (Standard Euler Linearization) using OLD Theta
+        A02_t = -dt * V * SinTh
+        A12_t = dt * V * CosTh
+
+        b00 = dt * CosTh
+        b10 = dt * SinTh
+        b20 = dt * TanDelta / L
+        b21 = dt * V / (L * CosDeltaSq)
+
+        # --- EKF Update (Optimized Element-wise with Coalesced Access) ---
+
+        # Load S components.
+        S00 = S[0, 0, :]; S01 = S[0, 1, :]; S02 = S[0, 2, :]
+        S11 = S[1, 1, :]; S12 = S[1, 2, :]
+        S22 = S[2, 2, :]
+
+        # ES terms (using symmetry S02=S20, S12=S21)
         ES00 = A02_t * S02; ES01 = A02_t * S12; ES02 = A02_t * S22
-        # ES10 = A12_t * S02; # Symmetric to SET10
         ES11 = A12_t * S12; ES12 = A12_t * S22
-        # ES2x = 0
 
-        # --- SE^T terms (using symmetry) ---
-        SET00 = S02 * A02_t; SET01 = S02 * A12_t; # SET02 = 0
-        # SET10 = S12 * A02_t; # Symmetric to ES01
-        SET11 = S12 * A12_t; # SET12 = 0
-        # SET2x = ... (Calculated below during combination)
+        # SE^T terms
+        SET01 = S02 * A12_t
 
-        # --- ESE^T terms (only top-left 2x2) ---
-        # Optimization: Pre-calculate intermediate products
+        # ESE^T terms
         A02_S22 = A02_t * S22
         A12_S22 = A12_t * S22
 
         ESET00 = A02_t * A02_S22
         ESET01 = A12_t * A02_S22
-        # ESET10 = Symmetric
         ESET11 = A12_t * A12_S22
 
-        # --- Combine: N = S + ES + SE^T + ESE^T ---
-        N00 = S00 + ES00 + SET00 + ESET00
-        N01 = S01 + ES01 + SET01 + ESET01
-        N02 = S02 + ES02 # + SET02 (is 0)
+        # --- Combine N and Add Noise BQB^T ---
+        q0_b00 = q0 * b00; q0_b10 = q0 * b10; q0_b20 = q0 * b20
 
-        N11 = S11 + ES11 + SET11 + ESET11
-        N12 = S12 + ES12 # + SET12 (is 0)
-
-        # Combine results back into the matrix S (B, nx, nx)
-        S[:, 0, 0] = N00; S[:, 0, 1] = N01; S[:, 0, 2] = N02
-        S[:, 1, 0] = N01; S[:, 1, 1] = N11; S[:, 1, 2] = N12 # Enforce symmetry
-        # Update the third row (SET2x terms). N20 = S20 + SET20. SET20 = S22*a02.
-        S[:, 2, 0] = S02 + A02_S22 # S02 (from S, symmetric S20) + S22*a02 (SET20)
-        S[:, 2, 1] = S12 + A12_S22 # S12 (from S, symmetric S21) + S22*a12 (SET21)
-        # S[:, 2, 2] remains S22
-
-        # Add Noise term BQB^T
-        S += BQB_t
-
-        # Store result for time t+1
-        covs[t+1] = S
+        # N00 (Optimization: 2*ES00 because ES00=SET00)
+        N00 = S00 + 2*ES00 + ESET00 + q0_b00 * b00
+        # N01
+        N01 = S01 + ES01 + SET01 + ESET01 + q0_b00 * b10
+        # N02
+        N02 = S02 + ES02 + q0_b00 * b20
         
-    # Transpose back to (B, T+1, nx, nx)
-    return covs.permute(1, 0, 2, 3)
+        # N11 (Optimization: 2*ES11)
+        N11 = S11 + 2*ES11 + ESET11 + q0_b10 * b10
+        # N12
+        N12 = S12 + ES12 + q0_b10 * b20
+        
+        # N22
+        N22_BQB = q0_b20 * b20 + q1 * b21 * b21
+        N22 = S22 + N22_BQB
+
+        # N20 (N20 = S20 + SET20 + BQB_20). SET20 = A02_S22. S20=S02 (symmetry).
+        N20 = S02 + A02_S22 + q0_b20 * b00
+        # N21
+        N21 = S12 + A12_S22 + q0_b20 * b10
+
+        # Write back to S (Coalesced Writes!)
+        S[0, 0, :] = N00; S[0, 1, :] = N01; S[0, 2, :] = N02
+        # Enforce symmetry explicitly on write-back
+        S[1, 0, :] = N01; S[1, 1, :] = N11; S[1, 2, :] = N12
+        S[2, 0, :] = N20; S[2, 1, :] = N21; S[2, 2, :] = N22
+
+        # Store result for time t+1 directly.
+        covs_coalesced[:, :, t+1, :] = S
+        
+    # Transpose outputs back to (B, T+1, ...)
+    trajs_out = trajs.permute(1, 0, 2)
+    # (nx, nx, T+1, B) -> (B, T+1, nx, nx)
+    covs_out = covs_coalesced.permute(3, 2, 0, 1)
+    
+    return trajs_out, covs_out
+
 
 # =================================================================================
 # UGEMPCController Class Definition
@@ -308,11 +585,31 @@ class UGEMPCController(TorchPlannerBase):
         self._load_uge_params()
         self._initialize_components(experiment_config, seed, mppi_config)
 
+        # (NEW) Determine propagation implementation
+        self._initialize_propagation_method()
+
         # Initialize the nominal control sequence (maintained across MPC steps)
         self.U_nominal = torch.zeros((self.T, self.nu), dtype=torch.float32, device=self.device)
         self.U_nominal[:, 0] = float(self.vrange[0])
 
         self.logger.info(f"UGEMPCController initialized. UGE-TO (N={self.N}, M={self.M}, Iters={self.iters}), MPPI (L={self.L})")
+
+    def _initialize_propagation_method(self):
+        """Determines whether to use the optimized Numba CUDA kernel or the fallback JIT implementation."""
+        # Default to True if Numba CUDA is available, allow override via config if needed
+        use_custom_cuda_default = (cuda is not None)
+        # Allow user to disable custom kernel via config if needed (e.g., for debugging)
+        self.use_custom_cuda_kernel = self.config.get("use_custom_cuda_kernel", use_custom_cuda_default)
+
+        if self.use_custom_cuda_kernel:
+            if cuda is None:
+                 self.logger.warning("Custom CUDA kernel requested but Numba CUDA is not available. Falling back to PyTorch JIT implementation.")
+                 self.use_custom_cuda_kernel = False
+            else:
+                self.logger.info("Using optimized Numba CUDA kernel for propagation.")
+        else:
+            self.logger.info("Using PyTorch JIT implementation for propagation (Fallback).")
+
 
     def _profile_start(self, section_name: str):
         """Start timing a section if profiling is enabled."""
@@ -330,8 +627,8 @@ class UGEMPCController(TorchPlannerBase):
                 self.profiling_data[section_name] = []
             self.profiling_data[section_name].append(elapsed_ms)
             
-            # Log detailed timing every iteration
-            self.logger.info(f"[PROFILE] {section_name}: {elapsed_ms:.2f}ms")
+            # Optional: Log detailed timing every iteration (can be verbose)
+            # self.logger.info(f"[PROFILE] {section_name}: {elapsed_ms:.2f}ms")
             return elapsed_ms
         return None
 
@@ -345,7 +642,7 @@ class UGEMPCController(TorchPlannerBase):
 
             # Updated sections to reflect the optimized structure
             # We show the total time spent in key areas across all iterations.
-            sections_to_show = ["UGE-TO_Total", "CombinedPropagation", "HellingerScoring", "MPPI_Total", "Visualization"]
+            sections_to_show = ["UGE-TO_Total", "FusedPropagation", "HellingerScoring", "MPPI_Total", "Visualization"]
 
             for section in sections_to_show:
                  if section in self.profiling_data and self.profiling_data[section]:
@@ -388,10 +685,17 @@ class UGEMPCController(TorchPlannerBase):
             self._initialize_selection_mask()
 
             noise_cfg = self.config["noise"]
+            
+            # R (Sigma_u): Covariance for sampling perturbations
             R_std = np.array(noise_cfg["R_std"], dtype=np.float32)
             self.R_cov = torch.diag(torch.tensor(R_std**2, device=self.device, dtype=torch.float32))
+            
+            # Q: Covariance for EKF propagation (Input noise model BQB^T)
             Q_std = np.array(noise_cfg["Q_std"], dtype=np.float32)
             self.Q_cov = torch.diag(torch.tensor(Q_std**2, device=self.device, dtype=torch.float32))
+            # OPTIMIZATION: Prepare Q diagonal for fused kernel
+            self.Q_diag = torch.diagonal(self.Q_cov).contiguous()
+
             Sigma0_std = np.array(noise_cfg["Sigma0_std"], dtype=np.float32)
             self.Sigma0_cov = torch.diag(torch.tensor(Sigma0_std**2, device=self.device, dtype=torch.float32))
 
@@ -407,8 +711,6 @@ class UGEMPCController(TorchPlannerBase):
     def _initialize_selection_mask(self):
         """
         Pre-calculates the mask used in vectorized scoring to exclude self-comparisons.
-        The mask ensures that candidates generated from trajectory i (i>0) are not compared
-        against the base trajectory i itself when calculating the diversity score.
         Mask shape: (N-1, N)
         """
         if self.N <= 1:
@@ -419,11 +721,7 @@ class UGEMPCController(TorchPlannerBase):
         # Initialize mask to all True (1.0)
         mask = torch.ones(N_minus_1, self.N, device=self.device, dtype=torch.float32)
 
-        # The rows correspond to groups g=0..N-2 (trajectories i=1..N-1).
-        # The columns correspond to the base trajectories j=0..N-1.
         # We want to set mask[g, j] = 0 where j = g + 1 (the self-comparison).
-
-        # Create indices for the diagonal starting from column 1
         row_indices = torch.arange(N_minus_1, device=self.device)
         col_indices = row_indices + 1
 
@@ -435,14 +733,12 @@ class UGEMPCController(TorchPlannerBase):
     def _initialize_components(self, experiment_config, seed, mppi_config_override):
         """Initialize the MPPI refiner and pre-calculate Cholesky decompositions."""
         
-        # Determine the MPPI configuration to use. Prioritize the specific 'refinement_config' block.
-        # If 'refinement_config' is missing, use the 'mppi_config' passed from the ROS node factory (which usually points to the general 'mppi_controller' block).
+        # (MPPI Initialization remains the same)
         config_to_use = self.mppi_refinement_config if self.mppi_refinement_config is not None else mppi_config_override
         
         if config_to_use is None:
              raise ValueError("MPPI configuration missing. Ensure 'refinement_config' is in YAML or 'mppi_config' is passed via the ROS node factory.")
 
-        # Ensure the config has the required 'num_rollouts' key for BaseController initialization
         if 'num_rollouts' not in config_to_use:
             config_to_use['num_rollouts'] = self.L
 
@@ -471,7 +767,7 @@ class UGEMPCController(TorchPlannerBase):
         # Start overall timing
         overall_start = self._profile_start("Overall")
         # 
-        # 0. Setup and Warm-start (~0.9ms - lightweight)
+        # 0. Setup and Warm-start
         self._process_planner_input(planner_input)
         self._shift_nominal_trajectory()
         U_start = self.U_nominal.clone()
@@ -480,7 +776,7 @@ class UGEMPCController(TorchPlannerBase):
         x0_robot_frame = torch.zeros(self.nx, device=self.device, dtype=torch.float32)
         goal_tensor = torch.from_numpy(planner_input.local_goal).float().to(self.device)
 
-        # 1. UGE-TO Initialization - MAIN BOTTLENECK (~1044ms)
+        # 1. UGE-TO Initialization
         ugeto_start = self._profile_start("UGE-TO_Total")
         # Runs Alg. 1 and selects the best trajectory i*
         U_nominal_ugto, uge_to_trajs_T, best_idx_ugto = self._run_uge_to_initialization(
@@ -488,7 +784,7 @@ class UGEMPCController(TorchPlannerBase):
         )
         self._profile_end("UGE-TO_Total", ugeto_start)
 
-        # 2. MPPI Refinement (~14ms - lightweight compared to UGE-TO)
+        # 2. MPPI Refinement
         mppi_start = self._profile_start("MPPI_Total")
         # Ensure the MPPI refiner uses the same perception data.
         self.mppi_refiner._process_planner_input(planner_input)
@@ -503,10 +799,10 @@ class UGEMPCController(TorchPlannerBase):
         # Update the internal state for the next iteration
         self.U_nominal = U_nominal_final
 
-        # 3. Final Control Selection (~0.1ms - lightweight)
+        # 3. Final Control Selection
         control_action_np = U_nominal_final[0].cpu().numpy()
 
-        # 4. Visualization (~15ms total)
+        # 4. Visualization
         viz_start = self._profile_start("Visualization")
         if self.viz_config.get('enabled', True) and self.viz_config.get('visualize_trajectories', True):
             info = self._prepare_visualization_info_hybrid(
@@ -516,7 +812,6 @@ class UGEMPCController(TorchPlannerBase):
         else:
             info = {
                 'state_rollouts_robot_frame': None,
-                # Must be True to indicate the controller type, even if visualization is off
                 'is_hybrid': True, 
             }
         self._profile_end("Visualization", viz_start)
@@ -546,15 +841,14 @@ class UGEMPCController(TorchPlannerBase):
         (OPTIMIZED) Uses combined batch propagation and vectorized scoring.
         """
         
-        # 1. Initialization (Numba: optimize3D initialization phase)
+        # 1. Initialization
         init_start = self._profile_start("UGE-TO_Init")
         # Initialize N trajectories: 1 base + (N-1) perturbed.
-        # Crucial Detail: Numba implementation uses 3*R covariance for this initial sampling.
         action_seqs = torch.empty(self.N, self.T, self.nu, device=self.device, dtype=torch.float32)
         action_seqs[0] = U_nominal_initial
         
         if self.N > 1:
-            # Sample noise (N-1, T, nu) using chol_3R
+            # Sample noise using chol_3R (matching original implementation)
             noise = self._sample_noise_uge_to(self.N - 1, self.T, self.chol_3R)
             action_seqs[1:] = U_nominal_initial.unsqueeze(0) + noise
         
@@ -571,20 +865,16 @@ class UGEMPCController(TorchPlannerBase):
             
             N_minus_1 = self.N - 1
             if N_minus_1 == 0:
-                # If N=1, we break. The final propagation happens after the loop.
                 break
 
             C_total = N_minus_1 * self.M
 
             # --- OPTIMIZATION: Batched Propagation Strategy ---
-            # We generate candidates first, then propagate N current trajectories 
-            # and C candidates in a single, large batch.
 
             # 2a. Generate M Candidates (C_total)
-            # Crucial Detail: Numba refines only N-1 trajectories (i=1 to N-1).
             decay_coeff = self.decay_coeffs[iter_idx]
             
-            # Sample noise (C_total, T, nu) using chol_R (standard R used here) and apply decay
+            # Sample noise using chol_R (standard R used here) and apply decay
             noise_candidates = self._sample_noise_uge_to(C_total, self.T, self.chol_R) * decay_coeff
             
             # Repeat base action sequences (i=1 to N-1) M times
@@ -594,14 +884,11 @@ class UGEMPCController(TorchPlannerBase):
             cand_all_flat = self._clamp_controls(cand_all_flat)
 
             # 2b. Combine Batches (N + C_total)
-            # OPTIMIZATION: Combine base (N) and candidate (C_total) actions.
             combined_actions = torch.cat([action_seqs, cand_all_flat], dim=0)
 
             # 2c. Propagate Combined Batch (N + C_total)
-            # This replaces the two separate calls (Base/Candidate Propagation).
-            prop_start = self._profile_start("CombinedPropagation")
+            # This now calls the optimized implementation (Numba CUDA or Fallback JIT).
             combined_trajs, combined_covs = self._propagate_mean_and_covariance(initial_state, combined_actions)
-            self._profile_end("CombinedPropagation", prop_start)
 
             # 2d. Extract Gaussians at specific intervals (S)
             # Extract base trajectories (first N)
@@ -615,7 +902,6 @@ class UGEMPCController(TorchPlannerBase):
             )
 
             # 2e. Score and Select (Vectorized)
-            # OPTIMIZATION: Use the fully vectorized JIT function instead of the Python loop.
             score_start = self._profile_start("HellingerScoring")
             
             # Call the optimized JIT kernel
@@ -634,8 +920,7 @@ class UGEMPCController(TorchPlannerBase):
 
         # 3. Final Evaluation and Selection (Algorithm 2, Stage 2)
         final_start = self._profile_start("UGE-TO_Final")
-        # Re-propagate the final diverse set. This is necessary for final cost evaluation 
-        # and ensures consistency with the Numba logic, handling edge cases (iters=0, N=1).
+        # Re-propagate the final diverse set.
         final_trajs, _ = self._propagate_mean_and_covariance(initial_state, action_seqs)
 
         # Calculate costs
@@ -659,100 +944,50 @@ class UGEMPCController(TorchPlannerBase):
         return noise
 
     def _propagate_mean_and_covariance(self, initial_state, action_seqs):
+        """ (OPTIMIZED) Fused propagation of the mean state and the covariance (EKF style).
+        Selects between the optimized Numba CUDA kernel and the fallback PyTorch JIT implementation.
         """
-        Propagates the mean state (using TorchPlannerBase dynamics) and the covariance 
-        (using PyTorch EKF implementation).
-        """
-        # 1. Propagate Mean (Standard rollout) - typically ~9ms
-        mean_start = self._profile_start("MeanPropagation")
-        # Transpose action_seqs: (B, T, nu) -> (T, B, nu)
-        action_seqs_transposed = action_seqs.permute(1, 0, 2)
-        # (T+1, B, nx)
-        trajs_transposed = self._rollout_full_controls_torch(action_seqs_transposed, initial_state)
-        # (B, T+1, nx)
-        trajs = trajs_transposed.permute(1, 0, 2)
-        self._profile_end("MeanPropagation", mean_start)
-
-        # 2. Propagate Covariance (EKF style) - typically ~17ms
-        cov_start = self._profile_start("CovariancePropagation")
-        covs = self._propagate_covariance_pytorch(trajs, action_seqs)
-        self._profile_end("CovariancePropagation", cov_start)
+        fused_start = self._profile_start("FusedPropagation")
         
+        if self.use_custom_cuda_kernel:
+            # Use the new, optimized Numba CUDA implementation
+            trajs, covs = _propagate_mean_and_covariance_custom_cuda(
+                initial_state, 
+                action_seqs,
+                self.Sigma0_cov,
+                self.Q_diag,
+                self.dt, self.wheelbase, self.nx, self.nu, self.device
+            )
+        else:
+            # Use the PyTorch JIT implementation (Fallback)
+            B, T, nu = action_seqs.shape
+            nx = self.nx
+
+            # Transpose action_seqs: (B, T, nu) -> (T, B, nu) for efficient access in the loop
+            action_seqs_T = action_seqs.permute(1, 0, 2).contiguous()
+            
+            # Prepare initial Sigma batch (B, nx, nx)
+            if B > 1:
+                 Sigma0_batch = self.Sigma0_cov.unsqueeze(0).expand(B, -1, -1)
+            else:
+                 Sigma0_batch = self.Sigma0_cov.unsqueeze(0)
+
+            # This fallback now also uses Standard Euler for consistency.
+            trajs, covs = _propagate_unified_JIT_fallback(
+                T, B, nx, nu,
+                initial_state,
+                action_seqs_T,
+                Sigma0_batch,
+                self.Q_diag,
+                self.dt,
+                self.wheelbase,
+                self.device
+            )
+        
+        self._profile_end("FusedPropagation", fused_start)
+        
+        # The outputs (trajs, covs) are in the expected (B, T+1, ...) format.
         return trajs, covs
-
-    def _propagate_covariance_pytorch(self, trajs, actions_batch):
-        """
-        Wrapper for the highly optimized JIT EKF propagation.
-        Prepares inputs (Jacobians and Noise terms) using vectorized operations.
-        Update rule: Sigma_{t+1} = A_t Sigma_t A_t^T + B_t Q B_t^T
-        """
-        # Setup and tensor initialization (~0.5ms)
-        B, T, _ = actions_batch.shape
-        L = self.wheelbase
-        dt = self.dt
-        
-        # Extract components for Jacobian calculation (Batched over B and T)
-        V = actions_batch[:, :, 0]
-        Delta = actions_batch[:, :, 1]
-        Theta = trajs[:, :T, 2] # State at time t
-
-        # Pre-calculate trigonometric functions
-        SinTh = torch.sin(Theta)
-        CosTh = torch.cos(Theta)
-        TanDelta = torch.tan(Delta)
-
-        eps = torch.tensor(1e-6, device=self.device, dtype=torch.float32)
-        CosDeltaSq = torch.clamp(torch.cos(Delta)**2, min=eps)
-
-        # --- Calculate Jacobian components (E = A-I and B) (Batched over B, T) ---
-        # E components (A = I + E)
-        a02 = -dt * V * SinTh
-        a12 = dt * V * CosTh
-
-        # B components
-        b00 = dt * CosTh
-        b10 = dt * SinTh
-        b20 = dt * TanDelta / L
-        b21 = dt * V / (L * CosDeltaSq)
-
-        # Q components (Diagonal)
-        q0 = self.Q_cov[0, 0]
-        q1 = self.Q_cov[1, 1]
-
-        # Pre-calculate BQB^T (B, T, nx, nx) using explicit expansion
-        BQB = torch.zeros(B, T, self.nx, self.nx, device=self.device, dtype=torch.float32)
-        
-        # q0 terms
-        BQB[:, :, 0, 0] = q0 * b00 * b00
-        BQB[:, :, 0, 1] = q0 * b00 * b10
-        BQB[:, :, 0, 2] = q0 * b00 * b20
-        BQB[:, :, 1, 0] = BQB[:, :, 0, 1] # Symmetric
-        BQB[:, :, 1, 1] = q0 * b10 * b10
-        BQB[:, :, 1, 2] = q0 * b10 * b20
-        BQB[:, :, 2, 0] = BQB[:, :, 0, 2] # Symmetric
-        BQB[:, :, 2, 1] = BQB[:, :, 1, 2] # Symmetric
-        BQB[:, :, 2, 2] = q0 * b20 * b20
-
-        # q1 term
-        BQB[:, :, 2, 2] += q1 * b21 * b21
-        
-        # Prepare initial Sigma batch (B, nx, nx)
-        Sigma0_batch = self.Sigma0_cov.unsqueeze(0).repeat(B, 1, 1)
-
-        # Transpose inputs for optimized JIT loop (B, T, ...) -> (T, B, ...)
-        # .contiguous() ensures the memory layout is actually changed
-        a02_T = a02.transpose(0, 1).contiguous()
-        a12_T = a12.transpose(0, 1).contiguous()
-        BQB_T = BQB.permute(1, 0, 2, 3).contiguous()
-
-        # EKF Update Loop (JIT Compiled and Optimized)
-        ekf_loop_start = self._profile_start("EKFLoop")
-        # Call the optimized JIT function
-        covs = _propagate_covariance_jit_optimized(
-            T, B, self.nx, a02_T, a12_T, BQB_T, Sigma0_batch, self.device
-        )
-        self._profile_end("EKFLoop", ekf_loop_start)
-        return covs
 
     def _extract_gaussians_at_idx3d(self, trajs, covs, idx):
         """Extracts means and covariances at specific time indices."""
@@ -777,50 +1012,39 @@ class UGEMPCController(TorchPlannerBase):
                                            mppi_trajectories_T, u_nominal_final):
         """
         Prepare visualization data for the hybrid approach (4-color visualization).
-        Includes padding and separation of best/samples for visualization stability and clarity.
-        Inputs are expected in the ROBOT FRAME.
-        
-        uge_to_trajectories_T: (T+1, N, nx)
-        mppi_trajectories_T: (T+1, L, nx)
+        (Implementation remains the same as the original file)
         """
         
-        # Define the target visualization size based on the configuration (~0.1ms)
-        TARGET_VIS_SIZE = self.num_vis_rollouts # e.g., 1000
+        # Define the target visualization size based on the configuration
+        TARGET_VIS_SIZE = self.num_vis_rollouts
         
         # Transform inputs to (Batch, T+1, nx) format and ensure contiguous memory layout
         uge_to_trajectories = uge_to_trajectories_T.permute(1, 0, 2).contiguous()
         mppi_trajectories = mppi_trajectories_T.permute(1, 0, 2).contiguous()
         N_total = uge_to_trajectories.shape[0]
 
-        # --- 1. UGE-TO Best Sample - (Corresponds to 'cu_best' - Blue) --- (~0.1ms)
-        # Shape: (T+1, nx)
+        # --- 1. UGE-TO Best Sample - (Blue) ---
         if N_total > 0:
             ugto_best_np = uge_to_trajectories[best_idx_ugto].cpu().numpy()
         else:
-            # Handle edge case N=0 (should ideally not happen based on config checks)
             ugto_best_np = np.zeros((self.T + 1, self.nx), dtype=np.float32)
 
-        # --- 2. UGE-TO Samples (Excluding Best) - (Corresponds to 'cu_samples' - Grey) --- (~0.6ms)
-        # Initialize a full-sized array, pre-filled with the best trajectory (padding)
+        # --- 2. UGE-TO Samples (Excluding Best) - (Grey) ---
         ugto_samples_np = np.tile(ugto_best_np, (TARGET_VIS_SIZE, 1, 1))
 
-        # Create a mask to exclude the best index
         mask = torch.ones(N_total, dtype=torch.bool, device=self.device)
         if N_total > 0:
             mask[best_idx_ugto] = False
         
-        # Select the remaining (non-best) trajectories
         uge_to_non_best = uge_to_trajectories[mask]
 
-        # Copy the actual non-best samples into the beginning of the padded array
         num_actual_non_best = uge_to_non_best.shape[0]
         num_to_copy = min(TARGET_VIS_SIZE, num_actual_non_best)
         
         if num_to_copy > 0:
             ugto_samples_np[:num_to_copy] = uge_to_non_best[:num_to_copy].cpu().numpy()
 
-        # --- 3. MPPI Final (Weighted Average) - (Corresponds to 'mppi_nominal' - Green) --- 
-        # This is the most expensive visualization step (~11ms) due to rollout
+        # --- 3. MPPI Final (Weighted Average) - (Green) --- 
         mppi_nominal_start = self._profile_start("VizMPPINominal")
         # Rollout the final nominal control sequence
         robot_frame_initial_state = torch.zeros(self.nx, device=self.device, dtype=torch.float32)
@@ -833,19 +1057,15 @@ class UGEMPCController(TorchPlannerBase):
         mppi_nominal_np = nominal_traj_robot.squeeze(1).cpu().numpy()
         self._profile_end("VizMPPINominal", mppi_nominal_start)
 
-        # --- 4. MPPI Samples - (Corresponds to 'mppi_samples' - Orange) --- (~0.3ms)
-        # Initialize a full-sized array, pre-filled with the nominal trajectory (padding)
+        # --- 4. MPPI Samples - (Orange) ---
         mppi_samples_np = np.tile(mppi_nominal_np, (TARGET_VIS_SIZE, 1, 1))
 
-        # Copy the actual MPPI samples
         num_actual_mppi_samples = mppi_trajectories.shape[0]
         num_to_copy_mppi = min(TARGET_VIS_SIZE, num_actual_mppi_samples)
         if num_to_copy_mppi > 0:
-             # MPPI samples already exclude the nominal, so we copy them directly
              mppi_samples_np[:num_to_copy_mppi] = mppi_trajectories[:num_to_copy_mppi].cpu().numpy()
 
-        # --- 5. Package Data --- (~2.3ms for angle wrapping and memory layout)
-        # We reuse the visualization keys from CU-MPPI for consistency in the ROS node.
+        # --- 5. Package Data ---
         trajectory_data = {
             'cu_samples': ugto_samples_np,
             'cu_best': ugto_best_np,
@@ -853,22 +1073,20 @@ class UGEMPCController(TorchPlannerBase):
             'mppi_nominal': mppi_nominal_np,
         }
         
-        # Apply angle wrapping and ensure contiguity (Robustness for ROS serialization)
+        # Apply angle wrapping and ensure contiguity
         for key in trajectory_data:
             traj_array = trajectory_data[key]
             if traj_array is not None:
-                # Ensure the array is contiguous (np.tile ensures this, but we double check)
                 if not traj_array.flags['C_CONTIGUOUS']:
                     traj_array = np.ascontiguousarray(traj_array)
                 
-                # Apply wrapping to the theta dimension (index 2).
-                # Handles both (N, T, 3) and (T, 3) shapes using ellipsis (...).
+                # Apply wrapping to the theta dimension (index 2) to [-pi, pi] for visualization.
+                # We use arctan2(sin, cos) which correctly handles angles regardless of their input range (e.g. [0, 2pi] or [-pi, pi]).
                 traj_array[..., 2] = np.arctan2(np.sin(traj_array[..., 2]), np.cos(traj_array[..., 2]))
                 
                 trajectory_data[key] = traj_array
 
         vis_data = {
-            # The ROS node expects this specific dictionary structure when is_hybrid=True
             'state_rollouts_robot_frame': trajectory_data,
             'is_hybrid': True,
         }
