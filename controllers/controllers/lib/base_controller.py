@@ -48,9 +48,25 @@ class BaseController(ABC):
         self.vehicle_width = self.experiment_config['vehicle_width']
         self.wheelbase = self.experiment_config['vehicle_wheelbase']
         
+        # --- Dynamics Model Selection ---
+        # Read the dynamics model name from configuration.
+        self.dynamics_model_name = self.experiment_config['dynamics_model']
+
         # Control constraints
         self.vrange = np.array(self.experiment_config['vrange'], dtype=np.float32)
-        self.wrange = np.array(self.experiment_config['wrange'], dtype=np.float32)
+        # self.wrange = np.array(self.experiment_config['wrange'], dtype=np.float32)
+        
+        # Read specific constraints. If not present, fall back to 'wrange'.
+        steering_config = self.experiment_config.get('steering_angle_range')
+        angular_vel_config = self.experiment_config.get('angular_velocity_range')
+
+        # Convert to numpy arrays if configuration exists
+        self.steering_angle_range = np.array(steering_config, dtype=np.float32) if steering_config is not None else None
+        self.angular_velocity_range = np.array(angular_vel_config, dtype=np.float32) if angular_vel_config is not None else None
+
+        # Ensure at least one constraint definition was provided.
+        if self.steering_angle_range is None and self.angular_velocity_range is None:
+            raise ValueError("Configuration error: Missing control constraints. Must provide 'wrange', 'steering_angle_range', or 'angular_velocity_range'.")
         
         # Cost weights
         self.obs_penalty = self.experiment_config['obs_penalty']

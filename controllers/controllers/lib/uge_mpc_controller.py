@@ -926,8 +926,8 @@ class UGEMPCController(TorchPlannerBase):
     def _clamp_controls(self, controls):
         """Clamps controls (B, T, nu) to the vehicle limits."""
         if not hasattr(self, 'min_ctrl_tensor'):
-            self.min_ctrl_tensor = torch.tensor([float(self.vrange[0]), float(self.wrange[0])], device=self.device).view(1, 1, 2)
-            self.max_ctrl_tensor = torch.tensor([float(self.vrange[1]), float(self.wrange[1])], device=self.device).view(1, 1, 2)
+            self.min_ctrl_tensor = torch.tensor([float(self.vrange[0]), float(self.active_wrange[0])], device=self.device).view(1, 1, 2)
+            self.max_ctrl_tensor = torch.tensor([float(self.vrange[1]), float(self.active_wrange[1])], device=self.device).view(1, 1, 2)
         
         return torch.max(torch.min(controls, self.max_ctrl_tensor), self.min_ctrl_tensor)
 

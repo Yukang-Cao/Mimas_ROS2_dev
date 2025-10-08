@@ -15,6 +15,10 @@ controllers_to_test:
   # - "cuniform_map_conditioned"
   # - "cuniform_unsupervised_openspace"
 
+# Options: "kinematic_single_track", "differential_drive", "simple_boat"
+# dynamics_model: "kinematic_single_track"
+dynamics_model: "simple_boat" # same as differential_drive
+
 # global map parameters
 global_map_resolution: 0.05   # global map grid resolution (meters/cell)
 
@@ -36,12 +40,17 @@ vehicle_wheelbase: 0.48       # Wheelbase in meters (alphatruck)
 # Control constraints
 # If min_v != max_v, variable_velocity_mode is active.
 vrange: [0.5, 1.5]            # [min_v, max_v] (m/s)
-# vrange: [2.0, 2.5]            # [min_v, max_v] (m/s)
-# vrange: [1.25, 1.25]
-# vrange: [0.5, 1.5]
-  # vrange: [2.5, 2.5]            # [min_v, max_v] (m/s)
+
+# Legacy 'wrange' for reference, it's steering angle range for KST dynamics
 # wrange: [-0.524, 0.524]       # [min_steering_angle, max_steering_angle] (radians)
-wrange: [-0.401, 0.401]       # [min_steering_angle, max_steering_angle] (radians)
+# wrange: [-0.401, 0.401]       # [min_steering_angle, max_steering_angle] (radians)
+
+# KST Dynamics Limits: Steering angle range [min_delta, max_delta] (radians)
+steering_angle_range: [-0.524, 0.524]
+
+# Differential Drive/Boat Dynamics Limits: Angular velocity range [min_omega, max_omega] (rad/s)
+# Increase these limits to allow the boat model to achieve sharper turns.
+angular_velocity_range: [-1.5, 1.5] 
 
 # Cost function weights (Tuning parameters)
 terminal_weight: 1.0          # Weight for terminal cost
@@ -77,10 +86,10 @@ robot_body_filter_radius: 0.2   # Radius around robot center to ignore LiDAR poi
 # Visualization Configuration
 #===============================================================================
 visualization:
-  enabled: False                 # Master switch
+  enabled: True                 # Master switch
   visualize_trajectories: True  # Enable/disable trajectory visualization (saves significant time if false)
   visualize_goal: True          # Enable/disable local goal visualization
-  skip_mppi_samples: True       # Skip MPPI perturbed samples, only show UGE trajectories + best/optimal trajectories
+  skip_mppi_samples: False      # Skip MPPI perturbed samples, only show UGE trajectories + best/optimal trajectories
 
 #===============================================================================
 # Obstacle Inflation Parameters
@@ -153,6 +162,10 @@ mppi_controller:
   # u_std: [0.5, 0.087266] 
   # u_std: [1.0, 0.174532]
   # u_std: [0.04, 0.01]    
+
+  # Noise std for DiffDrive/Boat [vel_std, angular_velocity_std (rad/s)]
+  # This key MUST exist if using differential_drive or simple_boat with MPPI.
+  u_std_angular_vel: [0.1, 0.5]
 
   # MPPI algorithm parameters
   # lambda_weight: 0.01      # Temperature parameter for importance weighting

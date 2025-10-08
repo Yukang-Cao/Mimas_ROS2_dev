@@ -56,19 +56,35 @@ class MPPIPyTorchController(TorchPlannerBase):
         print(f"MPPIPyTorch Controller initialized. MPPI-Type: {self.mppi_type}. Samples: {self.K}")
 
     def _init_noise_params(self):
-        """Initialize noise parameters, handling fixed/variable velocity modes."""
-        # Noise standard deviations [velocity_std, steering_std]
-        u_std_config = np.array(self.config['u_std'], dtype=np.float32)
+        """Initialize noise parameters, adapting based on velocity mode and dynamics type."""
+        
+        # Determine which configuration key to use based on the dynamics model's control type
+        if self.dynamics.control_type == 'angular_velocity':
+            # For DiffDrive/Boat, use the angular velocity noise configuration
+            noise_config_key = 'u_std_angular_vel'
+            print(f"INFO: MPPI configured for angular velocity control. Using noise config: '{noise_config_key}'")
+        else:
+            # Default to the original configuration key (steering angle) for KST
+            noise_config_key = 'u_std'
+            print(f"INFO: MPPI configured for steering angle control. Using noise config: '{noise_config_key}'")
+
+        # Ensure the required configuration exists in the YAML file
+        if noise_config_key not in self.config:
+             raise ValueError(
+                 f"Configuration error: Missing noise configuration '{noise_config_key}' required for dynamics model '{self.dynamics_model_name}'.\n"
+                 f"Please add '{noise_config_key}' to the 'mppi_controller' section in the experiment config (see Assumptions)."
+             )
+
+        u_std_config = np.array(self.config[noise_config_key], dtype=np.float32)
         u_std = u_std_config.copy()
 
         if not self.variable_velocity_mode:
             # Fixed velocity mode: velocity noise is zero
             u_std[0] = 0.0
         elif u_std[0] <= 0:
-            print(f"WARNING: Variable velocity mode is enabled, but velocity noise sigma (u_std[0]) is {u_std[0]}.")
+            print(f"WARNING: Variable velocity mode is enabled, but velocity noise sigma ({noise_config_key}[0]) is {u_std[0]}.")
 
-
-        # Shape (2,) for [vel, steer]
+        # Shape (2,) for [vel, steer/omega]
         self.noise_sigma = torch.tensor(u_std, device=self.device, dtype=torch.float32)
 
         if self.mppi_type == 1:
@@ -148,8 +164,8 @@ class MPPIPyTorchController(TorchPlannerBase):
 
         # Control limits for clamping (Tensors for broadcasting)
         # Shape (1, 1, 2)
-        min_ctrl = torch.tensor([float(self.vrange[0]), float(self.wrange[0])], device=self.device).view(1, 1, 2)
-        max_ctrl = torch.tensor([float(self.vrange[1]), float(self.wrange[1])], device=self.device).view(1, 1, 2)
+        min_ctrl = torch.tensor([float(self.vrange[0]), float(self.active_wrange[0])], device=self.device).view(1, 1, 2)
+        max_ctrl = torch.tensor([float(self.vrange[1]), float(self.active_wrange[1])], device=self.device).view(1, 1, 2)
 
         # MPPI Iteration Loop
         for iteration in range(self.mppi_iterations):

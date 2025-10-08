@@ -300,7 +300,7 @@ class LocalPlannerNode(Node):
         planning_time = (time.monotonic() - planning_start) * 1000
 
         # 4. Publish Control
-        self.get_logger().info(f"control_action: {control_action[0]}, {control_action[1]}")
+        # self.get_logger().info(f"control_action: {control_action[0]}, {control_action[1]}")
         self.publish_control_command(control_action)
 
         # 5. Visualization
@@ -474,22 +474,41 @@ class LocalPlannerNode(Node):
         """Publishes a zero velocity command."""
         twist = Twist()
         self.cmd_vel_pub.publish(twist)
-
+    
     def publish_control_command(self, control_action: np.ndarray):
-        """Publishes the control action, converting steering angle to angular velocity."""
+        """Publishes the control action, interpreting the output based on the dynamics model."""
+        
+        # Ensure the controller and its dynamics interface are initialized
+        if self.controller is None or not hasattr(self.controller, 'dynamics'):
+            self.get_logger().error("Controller or dynamics interface not initialized. Stopping robot.", throttle_duration_sec=1.0)
+            self.publish_stop_command()
+            return
+
         twist = Twist()
         v = float(control_action[0])
-        # The controller library outputs steering angle (delta)
-        delta = float(control_action[1])
-        omega = -delta # NOTE: directly publish the steering angle as command to servo, add - to correct transformation
+        # The interpretation of the second control input depends on the dynamics model
+        control_input_2 = float(control_action[1])
         
-        # # Convert steering angle to angular velocity (omega) for the Twist message
-        # # omega = v * tan(delta) / L
-        # L = self.controller.wheelbase
-        # if L > 0 and not math.isnan(delta):
-        #     omega = v * np.tan(delta) / L
-        # else:
-        #     omega = 0.0
+        # rely on the controller instance to tell us how to interpret the output
+        control_type = self.controller.dynamics.control_type # initialized in TorchPlannerBase
+        if control_type == "steering_angle":
+            # KST Model: Input is steering angle (delta)
+            delta = control_input_2
+            omega = -delta 
+            # # Convert steering angle to angular velocity (omega) for the Twist message
+            # # omega = v * tan(delta) / L
+            # L = self.controller.wheelbase
+            # if L > 0 and not math.isnan(delta):
+            #     omega = v * np.tan(delta) / L
+            # else:
+            #     omega = 0.0
+        elif control_type == "angular_velocity":
+            # Differential Drive/Boat Model: Input is angular velocity (omega)
+            omega = control_input_2
+        else: # fail if the control type is unknown
+            self.get_logger().error(f"Unknown control type '{control_type}' from controller. Stopping robot.")
+            self.publish_stop_command()
+            return
 
         twist.linear.x = v
         twist.angular.z = omega

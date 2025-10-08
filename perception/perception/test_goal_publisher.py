@@ -24,12 +24,13 @@ class TestGoalPublisher(Node):
         goal_msg = PoseStamped()
         goal_msg.header.stamp = self.get_clock().now().to_msg()
         # goal_msg.header.frame_id = "world"
-        # goal_msg.header.frame_id = "base_link"
-        goal_msg.header.frame_id = "odom"
+        goal_msg.header.frame_id = "base_link"
+        # goal_msg.header.frame_id = "odom"
         
         # Create different goal positions for testing
         goals = [
-            (20.0, 0.0)
+            # (20.0, 0.0)
+            (0.0, 3.0)
             # (30.0, 0.0)
             # (-10.0, 0.0)
         ]

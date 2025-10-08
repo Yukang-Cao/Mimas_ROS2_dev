@@ -68,7 +68,7 @@ class CUniformController(TorchPlannerBase):
 
         self.rng = np.random.RandomState(self.seed)
         self.actions = self.generate_actions(
-            self.arange, self.num_a, self.wrange, self.num_steering_angle, False
+            self.arange, self.num_a, self.active_wrange, self.num_steering_angle, False
         )
         self.actions_tensor = torch.tensor(self.actions[:, 0], dtype=torch.float32, device=self.device)
         

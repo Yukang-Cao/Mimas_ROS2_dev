@@ -16,7 +16,11 @@ from typing import Tuple, Dict, Any, Optional
 
 from .base_controller import BaseController, PlannerInput
 
-from .utils.dynamics import ( # import the centralized dynamics functions using relative import
+from .utils.dynamics import (
+    get_dynamics_model,
+    DynamicsModel,
+    JitStepFn, # Import the type hint
+    # Import legacy functions for compatibility until CUniformController is fully refactored
     cuda_dynamics_KS_3d_scalar_v_batched as dynamics_scalar_torch,
     cuda_dynamics_KS_3d_variable_v_batched as dynamics_variable_torch
 )
@@ -25,61 +29,106 @@ from .utils.dynamics import ( # import the centralized dynamics functions using 
 # =================================================================================
 # JIT Compiled Helpers
 # =================================================================================
-@torch.jit.script
-def _rollout_controls_jit(
+# @torch.jit.script
+# def _rollout_controls_jit(
+#     controls_full: torch.Tensor, 
+#     initial_state: torch.Tensor, 
+#     dt: float, 
+#     wheelbase: float, 
+#     variable_velocity_mode: bool
+# ) -> torch.Tensor:
+#     """
+#     JIT compiled rollout loop to eliminate Python interpreter overhead.
+#     """
+#     T, K, _ = controls_full.shape
+#     state_dim = initial_state.shape[0]
+
+#     # Prepare initial batch (K, state_dim)
+#     # Robust handling of initial_state dimensions
+#     if initial_state.dim() == 1:
+#         batch_current_states = initial_state.unsqueeze(0).repeat(K, 1)
+#     elif initial_state.dim() == 2 and initial_state.shape[0] == 1:
+#          batch_current_states = initial_state.repeat(K, 1)
+#     else:
+#         # Assuming initial_state is (K, state_dim) or (3,) handled by the first case
+#         batch_current_states = initial_state
+
+#     trajectory_states = torch.empty((T + 1, K, state_dim), dtype=torch.float32, device=initial_state.device)
+#     trajectory_states[0] = batch_current_states
+
+#     # JIT compiles this loop
+#     # We assume UGE-MPC primarily uses variable velocity mode.
+#     # We use dynamics_variable_torch universally for JIT compatibility, 
+#     # as dynamics_scalar_torch requires a scalar v input which is inefficient in JIT (v[0].item() causes sync).
+    
+#     # Clone to ensure we don't modify the input states if they are reused
+#     states = batch_current_states.clone() 
+
+#     for step in range(T):
+#         current_controls = controls_full[step] # (K, 2)
+#         # INLINE Dynamics (cuda_dynamics_KS_3d_variable_v_batched) for better JIT Fusion
+#         # Extract state components (views, no copy)
+#         x = states[:, 0]
+#         y = states[:, 1]
+#         theta = states[:, 2]
+        
+#         # Extract control components
+#         v_cmd = current_controls[:, 0]
+#         steer_angle = current_controls[:, 1]
+        
+#         # Compute the new orientation
+#         theta_new = theta + (v_cmd / wheelbase) * torch.tan(steer_angle) * dt
+#         theta_new = (theta_new + math.pi) % (2*math.pi) - math.pi # wrap into [-pi, pi]
+        
+#         # Compute the new positions and update states in place
+#         states[:, 0] = x + v_cmd * torch.cos(theta_new) * dt
+#         states[:, 1] = y + v_cmd * torch.sin(theta_new) * dt
+#         states[:, 2] = theta_new
+#         trajectory_states[step + 1] = states
+#     return trajectory_states
+def _rollout_controls_functional(
     controls_full: torch.Tensor, 
     initial_state: torch.Tensor, 
     dt: float, 
-    wheelbase: float, 
-    variable_velocity_mode: bool
+    # pass the specific dynamics function and its parameters
+    dynamics_step_fn: JitStepFn, 
+    dynamics_params: Dict[str, float]
 ) -> torch.Tensor:
     """
-    JIT compiled rollout loop to eliminate Python interpreter overhead.
+    Functional rollout loop. Relies on a pre-compiled dynamics_step_fn.
+    
+    We do not JIT compile this function itself. The Python loop overhead is generally 
+    acceptable when the core dynamics (dynamics_step_fn) is compiled.
+    This allows dynamic selection of the dynamics model.
     """
     T, K, _ = controls_full.shape
-    state_dim = initial_state.shape[0]
-
-    # Prepare initial batch (K, state_dim)
-    # Robust handling of initial_state dimensions
-    if initial_state.dim() == 1:
+    if initial_state.dim() == 1: # handle initial_state dimensions
+        state_dim = initial_state.shape[0]
         batch_current_states = initial_state.unsqueeze(0).repeat(K, 1)
-    elif initial_state.dim() == 2 and initial_state.shape[0] == 1:
-         batch_current_states = initial_state.repeat(K, 1)
+    elif initial_state.dim() == 2:
+        state_dim = initial_state.shape[1]
+        if initial_state.shape[0] == 1:
+            batch_current_states = initial_state.repeat(K, 1)
+        else:
+            batch_current_states = initial_state
     else:
-        # Assuming initial_state is (K, state_dim) or (3,) handled by the first case
-        batch_current_states = initial_state
+        raise ValueError("Invalid initial_state dimensions")
+
 
     trajectory_states = torch.empty((T + 1, K, state_dim), dtype=torch.float32, device=initial_state.device)
     trajectory_states[0] = batch_current_states
 
-    # JIT compiles this loop
-    # We assume UGE-MPC primarily uses variable velocity mode.
-    # We use dynamics_variable_torch universally for JIT compatibility, 
-    # as dynamics_scalar_torch requires a scalar v input which is inefficient in JIT (v[0].item() causes sync).
-    
     # Clone to ensure we don't modify the input states if they are reused
     states = batch_current_states.clone() 
 
+    # The loop itself is Python, but the core dynamics computation is JIT-compiled.
     for step in range(T):
         current_controls = controls_full[step] # (K, 2)
-        # INLINE Dynamics (cuda_dynamics_KS_3d_variable_v_batched) for better JIT Fusion
-        # Extract state components (views, no copy)
-        x = states[:, 0]
-        y = states[:, 1]
-        theta = states[:, 2]
         
-        # Extract control components
-        v_cmd = current_controls[:, 0]
-        steer_angle = current_controls[:, 1]
+        # Call the JIT-compiled dynamics step function
+        # The dynamics function handles state updates (including wrapping angles) internally.
+        states = dynamics_step_fn(states, current_controls, dt, dynamics_params)
         
-        # Compute the new orientation
-        theta_new = theta + (v_cmd / wheelbase) * torch.tan(steer_angle) * dt
-        theta_new = (theta_new + math.pi) % (2*math.pi) - math.pi # wrap into [-pi, pi]
-        
-        # Compute the new positions and update states in place
-        states[:, 0] = x + v_cmd * torch.cos(theta_new) * dt
-        states[:, 1] = y + v_cmd * torch.sin(theta_new) * dt
-        states[:, 2] = theta_new
         trajectory_states[step + 1] = states
     return trajectory_states
 
@@ -93,6 +142,7 @@ class TorchPlannerBase(BaseController, ABC):
         self.device = torch.device('cuda')
 
         self.variable_velocity_mode = self.experiment_config.get('variable_velocity_mode', False)
+        self._init_dynamics()
 
         # Costmap handling: Store the inputs for the current planning cycle.
         self.current_costmap_np = None
@@ -105,6 +155,52 @@ class TorchPlannerBase(BaseController, ABC):
 
         self._init_footprint_kernel()
         self.set_seeds(self.seed)
+
+    def _init_dynamics(self):
+        """Initializes the dynamics model based on configuration."""
+        # Prepare parameters for the dynamics model
+        # pass relevant vehicle parameters from the experiment config
+        dynamics_params = {
+            'wheelbase': self.wheelbase,
+            # Add other parameters here if needed by future models
+        }
+        
+        # Instantiate the dynamics model using the factory
+        # self.dynamics_model_name is initialized in BaseController
+        try:
+            self.dynamics: DynamicsModel = get_dynamics_model(self.dynamics_model_name, dynamics_params)
+            print(f"Initialized dynamics model: {self.dynamics_model_name}")
+            print(f"  Control type: {self.dynamics.control_type}")
+        except ValueError as e:
+            # Brittle: Fail immediately if dynamics initialization fails (e.g., missing parameters)
+            raise RuntimeError(f"Failed to initialize dynamics model '{self.dynamics_model_name}': {e}")
+
+        # Get the JIT-compiled step function and parameters
+        self.dynamics_step_fn = self.dynamics.step
+        self.dynamics_params_jit = self.dynamics.params # This is Dict[str, float]
+        self._select_active_wrange()
+
+    def _select_active_wrange(self):
+        """Determines the appropriate control limits based on the dynamics model's control type."""
+        if self.dynamics.control_type == 'angular_velocity':
+            # Use the limits loaded from 'angular_velocity_range'
+            self.active_wrange = self.angular_velocity_range
+            source = 'angular_velocity_range'
+        elif self.dynamics.control_type == 'steering_angle':
+            # Use the limits loaded from 'steering_angle_range'
+            self.active_wrange = self.steering_angle_range
+            source = 'steering_angle_range'
+        else: # fail if the dynamics model reports an unknown control type.
+            raise RuntimeError(f"Unknown control type '{self.dynamics.control_type}' reported by dynamics model.")
+
+        # Ensure the selected range is valid and configured.
+        # check if the specific range (e.g., self.angular_velocity_range) was successfully loaded in BaseController.
+        if self.active_wrange is None or self.active_wrange.size != 2:
+            raise ValueError(
+                f"Configuration error: Invalid or missing control limits for dynamics model '{self.dynamics_model_name}'.\n"
+                f"Required configuration '{source}' (or the fallback 'wrange') must be defined as a list of 2 elements (e.g., [-1.0, 1.0])."
+            )
+        print(f"  Active control limits ({self.dynamics.control_type}): {self.active_wrange}")
     
     def _init_footprint_kernel(self):
         """Initializes the kernel for costmap convolution optimization"""
@@ -160,14 +256,21 @@ class TorchPlannerBase(BaseController, ABC):
         initial_state shape: (3,) [x, y, theta] (must be a Tensor)
         Returns shape: (T+1, K, 3)
         """
-        # The JIT function handles both modes efficiently now.
-        return _rollout_controls_jit(
+        return _rollout_controls_functional(
             controls_full, 
             initial_state, 
             self.dt, 
-            self.wheelbase, 
-            self.variable_velocity_mode
+            self.dynamics_step_fn,
+            self.dynamics_params_jit
         )
+        # # The JIT function handles both modes efficiently now.
+        # return _rollout_controls_jit(
+        #     controls_full, 
+        #     initial_state, 
+        #     self.dt, 
+        #     self.wheelbase, 
+        #     self.variable_velocity_mode
+        # )
 
     def _rollout_cuniform_controls_torch(self, controls_steer, initial_state, v_const):
         """
@@ -176,6 +279,15 @@ class TorchPlannerBase(BaseController, ABC):
         initial_state shape: (3,) [x, y, theta] (must be a Tensor)
         Returns shape: (T+1, K, 3)
         """
+        # check: This specialized rollout inherently assumes KST dynamics, 
+        # because C-Uniform controllers are trained specifically for KST.
+        if self.dynamics_model_name != 'kinematic_single_track':
+            # This should ideally be caught during controller initialization, but added here for safety.
+            raise RuntimeError(
+                f"Attempted to use C-Uniform specialized rollout with non-KST dynamics ('{self.dynamics_model_name}'). "
+                "C-Uniform controllers require 'kinematic_single_track'."
+            )
+
         T, K = controls_steer.shape
         state_dim = initial_state.shape[0]
 

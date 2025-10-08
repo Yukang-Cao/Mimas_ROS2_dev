@@ -26,9 +26,9 @@ def generate_launch_description():
         'controller_type',
         # default_value='cu_mppi_map_conditioned_log',
         # default_value = 'cu_mppi_unsupervised_log',
-        # default_value='mppi_pytorch',
+        default_value='mppi_pytorch',
         # default_value='log_mppi_pytorch',
-        default_value='uge_mpc_pytorch',
+        # default_value='uge_mpc_pytorch',
         description='The type of controller to use (e.g., uge_mpc_pytorch, mppi_pytorch, cu_mppi_unsupervised_std, cu_mppi_map_conditioned_std ...)'
     )
 
@@ -185,58 +185,58 @@ def generate_launch_description():
         # mocap_tf_broadcaster_node,   # For world -> base_link
         
         # Sequential launch with time delay
-        perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
+        # perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
         # TimerAction(
         #    period=5.0,
         #   actions=[rf2o_laser_odometry_launch]
         # ),
-        TimerAction(
-           period=3.0,
-           actions=[imu_launch]
-        ),
-        TimerAction(
-           period=5.0,
-           actions=[esc_to_odom_launch]
-        ),
+        # TimerAction(
+        #    period=3.0,
+        #    actions=[imu_launch]
+        # ),
+        # TimerAction(
+        #    period=5.0,
+        #    actions=[esc_to_odom_launch]
+        # ),
         # TimerAction(
         #    period=8.0,
         #    actions=[ekf_node]
         # ),
         
         # Launch dummy local costmap publisher for controller testing
-        # TimerAction(
-        #     period=1.0,
-        #     actions=[
-        #         Node(
-        #             package='perception',
-        #             executable='dummy_local_costmap_publisher',
-        #             name='dummy_local_costmap_publisher',
-        #             output='screen',
-        #             parameters=[
-        #                 {'config_file_path': config_file_path},
-        #                 {'use_sim_time': LaunchConfiguration('use_sim_time')}
-        #             ]
-        #         )
-        #     ]
-        # ),
+        TimerAction(
+            period=1.0,
+            actions=[
+                Node(
+                    package='perception',
+                    executable='dummy_local_costmap_publisher',
+                    name='dummy_local_costmap_publisher',
+                    output='screen',
+                    parameters=[
+                        {'config_file_path': config_file_path},
+                        {'use_sim_time': LaunchConfiguration('use_sim_time')}
+                    ]
+                )
+            ]
+        ),
         TimerAction(
             period=1.0,
             actions=[test_goal_node]
         ),
-        TimerAction(
-            period=7.5,
-            actions=[
-                Node(
-                    package='xmaxx_bringup',
-                    executable='xmaxx_interface_node',
-                    name='xmaxx_interface_node',
-                    output='screen',
-                    parameters=[
-                        {'use_sim_time': LaunchConfiguration('use_sim_time')}
-                    ]
-                )
-            ]                                    # Step 5.5: Xmaxx hardware interface (t=9.5s)
-        ),
+        # TimerAction(
+        #     period=7.5,
+        #     actions=[
+        #         Node(
+        #             package='xmaxx_bringup',
+        #             executable='xmaxx_interface_node',
+        #             name='xmaxx_interface_node',
+        #             output='screen',
+        #             parameters=[
+        #                 {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        #             ]
+        #         )
+        #     ]                                    # Step 5.5: Xmaxx hardware interface (t=9.5s)
+        # ),
         TimerAction(
             period=10.0,
             actions=[local_planner_node]         # Step 6: Local planner (t=10s)
