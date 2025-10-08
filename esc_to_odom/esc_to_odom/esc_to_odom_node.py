@@ -173,7 +173,7 @@ class XmaxxToOdom(Node):
         # between rc_throttle and ac_throttle
         raw_throttle = self.choose_throttle_raw(msg)
         v = self.throttle_to_speed(raw_throttle)
-        self.get_logger().info(f"v: {v}")
+        # self.get_logger().info(f"v: {v}")
         # Steering angle from feedback (use ac_steering)
         raw_steering = self.choose_steering_raw(msg)
         steer_angle = self.raw_to_steering_angle(raw_steering)
@@ -184,7 +184,7 @@ class XmaxxToOdom(Node):
             omega = v * math.tan(steer_angle) / self.wheelbase
         # invert the omega
         omega = -omega
-        self.get_logger().info(f"omega: {omega}")
+        # self.get_logger().info(f"omega: {omega}")
 
         # Integrate pose
         self.x += v * math.cos(self.yaw) * dt

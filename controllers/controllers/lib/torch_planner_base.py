@@ -197,7 +197,8 @@ class TorchPlannerBase(BaseController, ABC):
     # Cost Evaluation
     # =================================================================================
 
-    def _calculate_trajectory_costs(self, robot_frame_trajectories: torch.Tensor, goal_tensor: torch.Tensor) -> torch.Tensor:
+    def _calculate_trajectory_costs(self, robot_frame_trajectories: torch.Tensor,
+        goal_tensor: torch.Tensor, perturbed_controls_clamped: torch.Tensor = None) -> torch.Tensor:
         """
         (Fully Vectorized) Calculates the total cost for a batch of trajectories in the robot frame.
         Implements the logic of early exit (cost accumulation stops after goal reach or collision).
@@ -225,7 +226,6 @@ class TorchPlannerBase(BaseController, ABC):
         t0 = time.monotonic()
         obstacle_costs_raw = self._calculate_robot_frame_costmap_cost(positions)
         profile_data['cost_obs_lookup'] = (time.monotonic() - t0) * 1000
-
 
         # 2. Determine stateful masks (Collision and Goal Reached)
         # 2a. Collision detection at each timestep (T+1, K)
@@ -287,6 +287,25 @@ class TorchPlannerBase(BaseController, ABC):
         # (T+1, K) -> (K,)
         t0 = time.monotonic()
         total_costs = torch.sum(distance_costs_masked + obstacle_costs_masked, dim=0)
+
+        perturbed_controls_clamped = None
+        if perturbed_controls_clamped is not None:
+            # Ensure the weights are a tensor on the correct device.
+            # `self.action_cost_weight` is expected to be a list or array like [weight_v, weight_steer].
+            action_weights = torch.tensor(self.action_cost_weight, dtype=torch.float32, device=self.device)
+            # `perturbed_controls_clamped` has shape (T, K, 2).
+            # `torch.diff` computes u_t - u_{t-1}, result `action_diffs` has shape (T-1, K, 2).
+            action_diffs = torch.diff(perturbed_controls_clamped, n=1, dim=0)
+            # Calculate the squared difference for each action dimension. Shape: (T-1, K, 2)
+            action_diffs_squared = action_diffs**2
+            # Apply the respective weights to each action dimension via broadcasting.
+            # (T-1, K, 2) * (2,) -> (T-1, K, 2)
+            weighted_action_diffs_squared = action_diffs_squared * action_weights
+            # Sum the weighted penalties across the action dimensions for each time step. Result shape: (T-1, K)
+            per_step_action_cost = torch.sum(weighted_action_diffs_squared, dim=2)
+            # Sum the costs over the entire time horizon for each trajectory. Result shape: (K,)
+            action_costs = torch.sum(per_step_action_cost, dim=0)
+            total_costs += action_costs # add this smoothness cost to the total cost.
 
         # 6. Terminal costs
         # Terminal costs apply only for trajectories that never reached the goal AND were always safe.

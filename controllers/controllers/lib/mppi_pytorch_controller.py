@@ -108,6 +108,7 @@ class MPPIPyTorchController(TorchPlannerBase):
         U_optimal, mppi_trajectories = self._run_mppi_optimization(
             self.U_nominal, planner_input.local_goal
         )
+        # print(f"U_optimal[:5]: {U_optimal.cpu().numpy()[:5]}")
 
         # Update the internal nominal trajectory with the optimized one
         self.U_nominal = U_optimal
@@ -165,10 +166,13 @@ class MPPIPyTorchController(TorchPlannerBase):
             mppi_trajectories = self._rollout_full_controls_torch(perturbed_controls_clamped, robot_frame_initial_state)
 
             # 4. Calculate costs (K,)
-            costs = self._calculate_trajectory_costs(mppi_trajectories, goal_tensor)
+            costs = self._calculate_trajectory_costs(mppi_trajectories, goal_tensor, perturbed_controls_clamped)
+
+            # Find the minimum cost (beta) for numerical stability
+            beta = torch.min(costs).item()
 
             # 5. Weight trajectories (Importance Sampling)
-            weights = torch.softmax(-(1.0 / self.lambda_weight) * costs, dim=0)
+            weights = torch.softmax(-(1.0 / self.lambda_weight) * (costs - beta), dim=0)
 
             # 6. Update Nominal Control (Standard MPPI Update)
             # Use the raw sampled noise for the update, ignoring clamping effects.
@@ -179,7 +183,8 @@ class MPPIPyTorchController(TorchPlannerBase):
 
             # Calculate weighted perturbations
             # Sum((1, K, 1) * (T, K, 2)) along dim 1 -> (T, 2)
-            perturbations = torch.sum(weights_reshaped * noise_to_use, dim=1)
+            # perturbations = torch.sum(weights_reshaped * noise_to_use, dim=1)
+            perturbations = torch.sum(weights_reshaped * (perturbed_controls_clamped - U_nominal.unsqueeze(1)), dim=1)
 
             # Update nominal control
             U_nominal = U_nominal + perturbations
@@ -248,18 +253,27 @@ class MPPIPyTorchController(TorchPlannerBase):
         nominal_traj_robot_formatted = nominal_traj_robot.squeeze(1)
 
         # 3. Assemble visualization array (Best trajectory at index 0)
-        vis_rollouts = torch.zeros((num_vis, self.T + 1, 3), dtype=torch.float32, device=self.device)
+        # Check if we should skip MPPI samples for performance
+        skip_mppi_samples = self.viz_config.get('skip_mppi_samples', True)
+        
+        if skip_mppi_samples:
+            # Only show the best/nominal trajectory
+            vis_rollouts = torch.zeros((1, self.T + 1, 3), dtype=torch.float32, device=self.device)
+            vis_rollouts[0] = nominal_traj_robot_formatted
+        else:
+            # Full visualization - show best trajectory + samples
+            vis_rollouts = torch.zeros((num_vis, self.T + 1, 3), dtype=torch.float32, device=self.device)
+            
+            # Index 0: The optimal trajectory (Green line)
+            vis_rollouts[0] = nominal_traj_robot_formatted
 
-        # Index 0: The optimal trajectory (Green line)
-        vis_rollouts[0] = nominal_traj_robot_formatted
+            # Indices 1 onwards: Sampled trajectories (Black lines)
+            if num_vis > 1:
+                # We select the first N-1 samples from the last iteration.
+                num_samples_to_copy = min(num_vis - 1, mppi_traj_robot_formatted.shape[0])
 
-        # Indices 1 onwards: Sampled trajectories (Black lines)
-        if num_vis > 1:
-            # We select the first N-1 samples from the last iteration.
-            num_samples_to_copy = min(num_vis - 1, mppi_traj_robot_formatted.shape[0])
-
-            if num_samples_to_copy > 0:
-                vis_rollouts[1:1+num_samples_to_copy] = mppi_traj_robot_formatted[:num_samples_to_copy]
+                if num_samples_to_copy > 0:
+                    vis_rollouts[1:1+num_samples_to_copy] = mppi_traj_robot_formatted[:num_samples_to_copy]
 
         # Convert to numpy
         vis_rollouts_np = vis_rollouts.cpu().numpy()

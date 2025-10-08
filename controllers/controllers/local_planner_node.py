@@ -268,7 +268,6 @@ class LocalPlannerNode(Node):
 
     # --- Main Control Loop ---
     def control_loop(self):
-        torch.cuda.synchronize()
         start_time = time.monotonic()
         if not self.is_ready():
             # Waiting for data, do not necessarily stop the robot yet.
@@ -301,6 +300,7 @@ class LocalPlannerNode(Node):
         planning_time = (time.monotonic() - planning_start) * 1000
 
         # 4. Publish Control
+        self.get_logger().info(f"control_action: {control_action[0]}, {control_action[1]}")
         self.publish_control_command(control_action)
 
         # 5. Visualization

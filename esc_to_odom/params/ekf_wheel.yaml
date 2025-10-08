@@ -64,7 +64,7 @@ ekf_filter_node:
                       false, false, true,  # Fuse Angular Velocity (Vyaw).
                       false,  false,  false] # Fuse Linear Acceleration (Ax, Ay).
 
-
+        
         # # [ADVANCED] Some IMUs automatically remove acceleration due to gravity, and others don't. If yours doesn't, please set
         # # this to true, and *make sure* your data conforms to REP-103, specifically, that the data is in ENU frame.
 

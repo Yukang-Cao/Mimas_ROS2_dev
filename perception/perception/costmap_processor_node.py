@@ -115,7 +115,7 @@ class CostmapProcessorNode(Node):
             header.frame_id = "base_link"  # Local costmap is in robot frame
             
             # Use the standard publisher for 0-1 costmaps
-            self.publish_occupancy_grid(binary_costmap, header, self.binary_costmap_pub)
+            # self.publish_occupancy_grid(binary_costmap, header, self.binary_costmap_pub)
             self.publish_occupancy_grid(inflated_costmap, header, self.inflated_costmap_pub)
             
             # Use the specific SDF publisher which handles encoding

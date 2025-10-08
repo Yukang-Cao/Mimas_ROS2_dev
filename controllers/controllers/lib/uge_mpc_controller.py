@@ -217,7 +217,7 @@ if cuda is not None:
         covs_out = torch.empty(B, T + 1, nx, nx, device=device, dtype=torch.float32)
 
         # Configure the kernel launch
-        threads_per_block = 256 # Optimized for typical GPU architectures
+        threads_per_block = 128 # Optimized for typical GPU architectures
         blocks_per_grid = (B + threads_per_block - 1) // threads_per_block
 
         # Launch the kernel
@@ -571,10 +571,6 @@ class UGEMPCController(TorchPlannerBase):
         
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        # Profiling configuration - Read from config, default to True if not set (matching original behavior for analysis)
-        self.ENABLE_PROFILING = True
-        self.profiling_data = {}
-        self.profiling_iteration = 0
 
         # Standardized dimensions
         self.T = self.T_horizon
@@ -611,50 +607,6 @@ class UGEMPCController(TorchPlannerBase):
             self.logger.info("Using PyTorch JIT implementation for propagation (Fallback).")
 
 
-    def _profile_start(self, section_name: str):
-        """Start timing a section if profiling is enabled."""
-        if self.ENABLE_PROFILING:
-            torch.cuda.synchronize()
-            return time.perf_counter()
-        return None
-
-    def _profile_end(self, section_name: str, start_time):
-        """End timing a section and log the result if profiling is enabled."""
-        if self.ENABLE_PROFILING and start_time is not None:
-            torch.cuda.synchronize()
-            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-            if section_name not in self.profiling_data:
-                self.profiling_data[section_name] = []
-            self.profiling_data[section_name].append(elapsed_ms)
-            
-            # Optional: Log detailed timing every iteration (can be verbose)
-            # self.logger.info(f"[PROFILE] {section_name}: {elapsed_ms:.2f}ms")
-            return elapsed_ms
-        return None
-
-    def _profile_log_summary(self):
-        """Log a summary of all profiling data for the current iteration."""
-        if self.ENABLE_PROFILING and self.profiling_data:
-            summary_parts = []
-            overall_time = 0.0
-            if "Overall" in self.profiling_data and self.profiling_data["Overall"]:
-                overall_time = self.profiling_data["Overall"][-1]
-
-            # Updated sections to reflect the optimized structure
-            # We show the total time spent in key areas across all iterations.
-            sections_to_show = ["UGE-TO_Total", "FusedPropagation", "HellingerScoring", "MPPI_Total", "Visualization"]
-
-            for section in sections_to_show:
-                 if section in self.profiling_data and self.profiling_data[section]:
-                    # Calculate the total time spent in this section across all iterations
-                    total_section_time = sum(self.profiling_data[section])
-                    summary_parts.append(f"{section}: {total_section_time:.2f}ms")
-            
-            summary_str = " | ".join(summary_parts)
-            self.logger.info(f"[PROFILE SUMMARY] Iteration {self.profiling_iteration} - Total: {overall_time:.2f}ms | {summary_str}")
-            
-            # Clear data for next iteration to prevent memory buildup
-            self.profiling_data = {}
 
     def _load_uge_params(self):
         """
@@ -757,6 +709,7 @@ class UGEMPCController(TorchPlannerBase):
             self.chol_R = torch.linalg.cholesky(self.R_cov.double()).float().to(self.device)
             # Numba implementation uses 3*R specifically for the initial sampling in optimize3D
             self.chol_3R = torch.linalg.cholesky((3 * self.R_cov).double()).float().to(self.device)
+            # self.chol_3R = self.chol_R
         except torch.linalg.LinAlgError as e:
             self.logger.error(f"Cholesky decomposition failed for R_cov. Ensure R_std values create a positive definite matrix. Error: {e}")
             raise
@@ -764,8 +717,6 @@ class UGEMPCController(TorchPlannerBase):
     def get_control_action(self, planner_input: PlannerInput) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Compute optimal control action using UGE-MPC (Algorithm 2)."""
         # 
-        # Start overall timing
-        overall_start = self._profile_start("Overall")
         # 
         # 0. Setup and Warm-start
         self._process_planner_input(planner_input)
@@ -777,15 +728,12 @@ class UGEMPCController(TorchPlannerBase):
         goal_tensor = torch.from_numpy(planner_input.local_goal).float().to(self.device)
 
         # 1. UGE-TO Initialization
-        ugeto_start = self._profile_start("UGE-TO_Total")
         # Runs Alg. 1 and selects the best trajectory i*
         U_nominal_ugto, uge_to_trajs_T, best_idx_ugto = self._run_uge_to_initialization(
             U_start, x0_robot_frame, goal_tensor
         )
-        self._profile_end("UGE-TO_Total", ugeto_start)
 
         # 2. MPPI Refinement
-        mppi_start = self._profile_start("MPPI_Total")
         # Ensure the MPPI refiner uses the same perception data.
         self.mppi_refiner._process_planner_input(planner_input)
 
@@ -794,7 +742,6 @@ class UGEMPCController(TorchPlannerBase):
         U_nominal_final, mppi_trajectories_T = self.mppi_refiner._run_mppi_optimization(
             U_nominal_ugto, planner_input.local_goal
         )
-        self._profile_end("MPPI_Total", mppi_start)
 
         # Update the internal state for the next iteration
         self.U_nominal = U_nominal_final
@@ -803,7 +750,6 @@ class UGEMPCController(TorchPlannerBase):
         control_action_np = U_nominal_final[0].cpu().numpy()
 
         # 4. Visualization
-        viz_start = self._profile_start("Visualization")
         if self.viz_config.get('enabled', True) and self.viz_config.get('visualize_trajectories', True):
             info = self._prepare_visualization_info_hybrid(
                 uge_to_trajs_T, best_idx_ugto,
@@ -814,11 +760,6 @@ class UGEMPCController(TorchPlannerBase):
                 'state_rollouts_robot_frame': None,
                 'is_hybrid': True, 
             }
-        self._profile_end("Visualization", viz_start)
-        # End overall timing and log summary
-        self._profile_end("Overall", overall_start)
-        self.profiling_iteration += 1
-        self._profile_log_summary()
         return control_action_np, info
 
     def reset(self):
@@ -842,7 +783,6 @@ class UGEMPCController(TorchPlannerBase):
         """
         
         # 1. Initialization
-        init_start = self._profile_start("UGE-TO_Init")
         # Initialize N trajectories: 1 base + (N-1) perturbed.
         action_seqs = torch.empty(self.N, self.T, self.nu, device=self.device, dtype=torch.float32)
         action_seqs[0] = U_nominal_initial
@@ -855,13 +795,9 @@ class UGEMPCController(TorchPlannerBase):
         # Clamp initial actions
         action_seqs = self._clamp_controls(action_seqs)
 
-        self._profile_end("UGE-TO_Init", init_start)
-
         # 2. Iterative Distributional Separation (Optimized Loop)
-        iterations_start = self._profile_start("UGE-TO_Iterations")
         
         for iter_idx in range(self.iters):
-            iter_start = self._profile_start(f"Iter_{iter_idx}")
             
             N_minus_1 = self.N - 1
             if N_minus_1 == 0:
@@ -902,7 +838,6 @@ class UGEMPCController(TorchPlannerBase):
             )
 
             # 2e. Score and Select (Vectorized)
-            score_start = self._profile_start("HellingerScoring")
             
             # Call the optimized JIT kernel
             selected_actions_N_minus_1 = _score_and_select_vectorized_jit(
@@ -910,28 +845,22 @@ class UGEMPCController(TorchPlannerBase):
                 self.N, self.M, self.selection_mask
             )
             
-            self._profile_end("HellingerScoring", score_start)
             
             # Update the action sequences (keeping index 0 unchanged)
             action_seqs[1:] = selected_actions_N_minus_1
-            self._profile_end(f"Iter_{iter_idx}", iter_start)
             
-        self._profile_end("UGE-TO_Iterations", iterations_start)
-
         # 3. Final Evaluation and Selection (Algorithm 2, Stage 2)
-        final_start = self._profile_start("UGE-TO_Final")
         # Re-propagate the final diverse set.
         final_trajs, _ = self._propagate_mean_and_covariance(initial_state, action_seqs)
 
         # Calculate costs
         # Transpose final_trajs: (N, T+1, nx) -> (T+1, N, nx) for cost calculation
         final_trajs_transposed = final_trajs.permute(1, 0, 2)
-        task_costs = self._calculate_trajectory_costs(final_trajs_transposed, goal_tensor)
+        task_costs = self._calculate_trajectory_costs(final_trajs_transposed, goal_tensor, action_seqs.permute(1, 0, 2))
         
         # Select the best trajectory (i*)
         best_idx = torch.argmin(task_costs).item()
         U_nominal_ugto = action_seqs[best_idx]
-        self._profile_end("UGE-TO_Final", final_start)
 
         # Return the selected nominal, the set of final trajectories (T+1, N, nx), and the best index
         return U_nominal_ugto, final_trajs_transposed, best_idx
@@ -947,7 +876,6 @@ class UGEMPCController(TorchPlannerBase):
         """ (OPTIMIZED) Fused propagation of the mean state and the covariance (EKF style).
         Selects between the optimized Numba CUDA kernel and the fallback PyTorch JIT implementation.
         """
-        fused_start = self._profile_start("FusedPropagation")
         
         if self.use_custom_cuda_kernel:
             # Use the new, optimized Numba CUDA implementation
@@ -984,7 +912,6 @@ class UGEMPCController(TorchPlannerBase):
                 self.device
             )
         
-        self._profile_end("FusedPropagation", fused_start)
         
         # The outputs (trajs, covs) are in the expected (B, T+1, ...) format.
         return trajs, covs
@@ -1045,7 +972,6 @@ class UGEMPCController(TorchPlannerBase):
             ugto_samples_np[:num_to_copy] = uge_to_non_best[:num_to_copy].cpu().numpy()
 
         # --- 3. MPPI Final (Weighted Average) - (Green) --- 
-        mppi_nominal_start = self._profile_start("VizMPPINominal")
         # Rollout the final nominal control sequence
         robot_frame_initial_state = torch.zeros(self.nx, device=self.device, dtype=torch.float32)
         U_nominal_reshaped = u_nominal_final.unsqueeze(1) # (T, 1, nu)
@@ -1055,15 +981,21 @@ class UGEMPCController(TorchPlannerBase):
         
         # (T+1, 1, nx) -> (T+1, nx)
         mppi_nominal_np = nominal_traj_robot.squeeze(1).cpu().numpy()
-        self._profile_end("VizMPPINominal", mppi_nominal_start)
 
         # --- 4. MPPI Samples - (Orange) ---
-        mppi_samples_np = np.tile(mppi_nominal_np, (TARGET_VIS_SIZE, 1, 1))
-
-        num_actual_mppi_samples = mppi_trajectories.shape[0]
-        num_to_copy_mppi = min(TARGET_VIS_SIZE, num_actual_mppi_samples)
-        if num_to_copy_mppi > 0:
-             mppi_samples_np[:num_to_copy_mppi] = mppi_trajectories[:num_to_copy_mppi].cpu().numpy()
+        # Check if we should skip MPPI samples for performance
+        skip_mppi_samples = self.viz_config.get('skip_mppi_samples', True)
+        
+        if skip_mppi_samples:
+            # Skip MPPI samples - use empty array to reduce computation
+            mppi_samples_np = np.empty((0, self.T + 1, self.nx), dtype=np.float32)
+        else:
+            # Full visualization - show MPPI samples
+            mppi_samples_np = np.tile(mppi_nominal_np, (TARGET_VIS_SIZE, 1, 1))
+            num_actual_mppi_samples = mppi_trajectories.shape[0]
+            num_to_copy_mppi = min(TARGET_VIS_SIZE, num_actual_mppi_samples)
+            if num_to_copy_mppi > 0:
+                 mppi_samples_np[:num_to_copy_mppi] = mppi_trajectories[:num_to_copy_mppi].cpu().numpy()
 
         # --- 5. Package Data ---
         trajectory_data = {

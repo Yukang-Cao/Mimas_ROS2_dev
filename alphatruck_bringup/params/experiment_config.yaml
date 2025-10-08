@@ -19,7 +19,7 @@ controllers_to_test:
 global_map_resolution: 0.05   # global map grid resolution (meters/cell)
 
 # Planning Parameters
-horizon_T: 3.0                # Planning horizon in seconds
+horizon_T: 4.0                # Planning horizon in seconds
 dt: 0.10                      # Simulation timestep (affects all controllers)
 seed: 2025                    # Random seed for reproducibility
 
@@ -35,17 +35,20 @@ vehicle_wheelbase: 0.48       # Wheelbase in meters (alphatruck)
 
 # Control constraints
 # If min_v != max_v, variable_velocity_mode is active.
-# vrange: [0.5, 2.5]            # [min_v, max_v] (m/s)
+vrange: [0.5, 1.5]            # [min_v, max_v] (m/s)
 # vrange: [2.0, 2.5]            # [min_v, max_v] (m/s)
 # vrange: [1.25, 1.25]
-vrange: [0.5, 1.5]
+# vrange: [0.5, 1.5]
   # vrange: [2.5, 2.5]            # [min_v, max_v] (m/s)
-wrange: [-0.524, 0.524]       # [min_steering_angle, max_steering_angle] (radians)
+# wrange: [-0.524, 0.524]       # [min_steering_angle, max_steering_angle] (radians)
+wrange: [-0.401, 0.401]       # [min_steering_angle, max_steering_angle] (radians)
 
 # Cost function weights (Tuning parameters)
-terminal_weight: 5.0          # Weight for terminal cost
+terminal_weight: 1.0          # Weight for terminal cost
 obs_penalty: 1000.0           # Penalty for obstacle collision
-dist_weight: 1.0              # Weight for distance-to-goal cost
+dist_weight: 1.0             # Weight for distance-to-goal cost
+# action_cost_weight: [30.0, 50.0] # Weight for action cost, assigned w.r.t to the maximum action change
+action_cost_weight: [3.0, 5.0] # Weight for action cost, assigned w.r.t to the maximum action change
 goal_tolerance: 0.30          # Goal tolerance for all controllers (meters)
 
 # A sensitivity threshold defining a "hard collision" for the trajectory evaluation process.
@@ -53,7 +56,7 @@ goal_tolerance: 0.30          # Goal tolerance for all controllers (meters)
 # If this summed cost exceeds (footprint_area * collision_occupancy_ratio), the trajectory is heavily penalized. 
 # A lower value creates a more cautious planner that avoids inflation zones, 
 # a higher value allows for more aggressive navigation closer to obstacles.
-collision_occupancy_ratio: 0.35
+collision_occupancy_ratio: 0.5
 
 # The side length (in grid cells) of the square area used for cost evaluation within the planner.
 # This footprint is used to sample the inflated_costmap to calculate obstacle proximity and collision
@@ -64,6 +67,7 @@ robot_footprint_size: 9
 
 # Local Costmap Parameters (CRITICAL: Must match the perception node output!)
 local_costmap_size: 241         # Local costmap size in grid cells
+# local_costmap_size: 121         # Local costmap size in grid cells
 local_costmap_resolution: 0.05  # Local costmap resolution in meters/cell
 lidar_max_range: 30.0           # Maximum range to consider from LiDAR in meters
 # REAL ROBOT ONLY PARAMETER
@@ -73,9 +77,10 @@ robot_body_filter_radius: 0.2   # Radius around robot center to ignore LiDAR poi
 # Visualization Configuration
 #===============================================================================
 visualization:
-  enabled: True                 # Master switch
+  enabled: False                 # Master switch
   visualize_trajectories: True  # Enable/disable trajectory visualization (saves significant time if false)
   visualize_goal: True          # Enable/disable local goal visualization
+  skip_mppi_samples: True       # Skip MPPI perturbed samples, only show UGE trajectories + best/optimal trajectories
 
 #===============================================================================
 # Obstacle Inflation Parameters
@@ -144,9 +149,14 @@ mppi_controller:
   # Control noise parameters
   # If vrange is variable, u_std[0] (velocity noise) should ideally be > 0.
   u_std: [0.2, 0.10]       # Standard deviation for [linear_vel, angular_vel] noise
+  # u_std: [0.1, 0.05]       # Standard deviation for [linear_vel, angular_vel] noise
+  # u_std: [0.5, 0.087266] 
+  # u_std: [1.0, 0.174532]
+  # u_std: [0.04, 0.01]    
 
   # MPPI algorithm parameters
-  lambda_weight: 0.01      # Temperature parameter for importance weighting
+  # lambda_weight: 0.01      # Temperature parameter for importance weighting
+  lambda_weight: 1.0      # Temperature parameter for importance weighting
   num_opt: 1              # Number of optimization iterations per solve 
 
 # ========================================
@@ -156,15 +166,16 @@ uge_mpc_controller:
   # --- UGE-TO Initialization Stage (Algorithm 1) ---
   uge_to:
     # N: Number of diverse trajectories maintained
-    num_trajectories: 10 # (self.trajs in Numba)
+    num_trajectories: 12 # (self.trajs in Numba)
     # M: Candidates generated per trajectory during refinement
-    candidates_per_traj: 12 # (self.candidates_per_traj in Numba)
+    candidates_per_traj: 8 # (self.candidates_per_traj in Numba)
     
     # Iterations for refinement
-    iterations: 10 # (self.iters in Numba)
+    iterations: 6 # (self.iters in Numba)
     
     # Optimization parameters
-    step_interval: 10    # Calculate Hellinger distance every K steps
+    step_interval: 8    # Calculate Hellinger distance every K steps
+    # step_interval: 2    # Calculate Hellinger distance every K steps
     decay_sharpness: 2.0 # Controls the noise decay schedule
 
   # --- Noise Parameters (Crucial for UGE-TO) ---
@@ -172,21 +183,23 @@ uge_mpc_controller:
     # R (Sigma_u): Action sampling covariance (std dev) [v_std, delta_std]
     # Used for sampling perturbations in UGE-TO and MPPI.
     # Example matching Numba R_val=[0.5, 5.0 deg] (R_val in Numba seems to be STD)
-    R_std: [0.5, 0.087266] 
+    # R_std: [0.5, 0.087266] 
+    R_std: [1.0, 0.174532]
     
     # Q: Propagation input noise covariance (std dev) [v_std, delta_std]
     # Used in the EKF update (B Q B^T).
     # Example matching Numba Q_val=[0.05, 1.0 deg] (Q_val in Numba seems to be STD)
-    Q_std: [0.05, 0.017453] 
+    # Q_std: [0.05, 0.017453] 
+    Q_std: [0.10, 0.034906] 
     
     # Sigma0: Initial state covariance (std dev) [x_std, y_std, theta_std]
     # Example matching Numba Sigma0_val=[0.001, 0.001, 0.001]
-    Sigma0_std: [0.001, 0.001, 0.001] 
+    Sigma0_std: [0.001, 0.001, 0.017453] 
 
   # --- MPPI Refinement Stage (Algorithm 2, Stage 3) ---
   mppi:
     # L: Number of rollouts for MPPI refinement
-    num_rollouts: 128 # (num_rollouts in Numba generate_rollouts call)
+    num_rollouts: 256 # (num_rollouts in Numba generate_rollouts call)
     
     # Configuration for the MPPI refiner instance
     # This structure mirrors the standard 'mppi_controller' config block
@@ -195,7 +208,8 @@ uge_mpc_controller:
       
       # Control noise parameters for MPPI stage (Sigma_u).
       # Typically linked to R_std defined above.
-      u_std: [0.5, 0.087266] 
+      # u_std: [0.5, 0.087266] 
+      u_std: [1.0, 0.174532]
 
       # MPPI algorithm parameters
       # Example matching Numba lambda_weight=0.001 in solve_mppi_only_with_total_cost

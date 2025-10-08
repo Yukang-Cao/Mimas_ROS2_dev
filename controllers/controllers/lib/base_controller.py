@@ -55,6 +55,7 @@ class BaseController(ABC):
         # Cost weights
         self.obs_penalty = self.experiment_config['obs_penalty']
         self.dist_weight = self.experiment_config['dist_weight']
+        self.action_cost_weight = self.experiment_config['action_cost_weight']
         self.terminal_weight = self.experiment_config['terminal_weight']
         self.goal_tolerance = self.experiment_config['goal_tolerance']
 

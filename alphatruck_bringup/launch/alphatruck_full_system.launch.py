@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, TimerAction, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration
@@ -10,9 +9,10 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    # Get package directories
-    bringup_pkg = get_package_share_directory('alphatruck_bringup')
-    perception_pkg = get_package_share_directory('perception')
+    # Use src directory paths instead of install directory
+    workspace_src = '/home/alphatruck/ros2_ws/src'
+    bringup_pkg = os.path.join(workspace_src, 'alphatruck_bringup')
+    perception_pkg = os.path.join(workspace_src, 'perception')
     
     # Configuration paths
     config_file_path = os.path.join(bringup_pkg, 'params', 'experiment_config.yaml')
@@ -107,9 +107,16 @@ def generate_launch_description():
     #     name='dummy_odom_publisher',
     #     output='screen',
     # )
+    # Step 2: Launch ESC to odometry (wheel odometry)
+    esc_to_odom_pkg = os.path.join(workspace_src, 'esc_to_odom')
+    esc_to_odom_launch_path = os.path.join(esc_to_odom_pkg, 'launch', 'esc_to_odom.launch.py')
+    
+    esc_to_odom_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(esc_to_odom_launch_path)
+    )
     
     # Step 2: Launch RF2O laser odometry
-    rf2o_pkg = get_package_share_directory('rf2o_laser_odometry')
+    rf2o_pkg = os.path.join(workspace_src, 'rf2o_laser_odometry')
     rf2o_launch_path = os.path.join(rf2o_pkg, 'launch', 'rf2o_laser_odometry.launch.py')
     
     rf2o_laser_odometry_launch = IncludeLaunchDescription(
@@ -117,7 +124,7 @@ def generate_launch_description():
     )
 
     # Step 3: Launch VectorNav IMU
-    vectornav_pkg = get_package_share_directory('vectornav')
+    vectornav_pkg = os.path.join(workspace_src, 'vectornav', 'vectornav')
     vectornav_launch_path = os.path.join(vectornav_pkg, 'launch', 'vectornav.launch.py')
     
     imu_launch = IncludeLaunchDescription(
@@ -177,40 +184,44 @@ def generate_launch_description():
         # NOTE: dont' forget to start the mocap node if using this
         # mocap_tf_broadcaster_node,   # For world -> base_link
         
-        # Sequential launch with time delay: Perception -> Laser Odom -> IMU -> EKF -> Planner
-        # perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
+        # Sequential launch with time delay
+        perception_launch,              # Step 1: LiDAR + costmap processing (t=0)
         # TimerAction(
         #    period=5.0,
-        #   actions=[rf2o_laser_odometry_launch]  # Step 2: laser odometry (t=5s)
+        #   actions=[rf2o_laser_odometry_launch]
         # ),
-        # TimerAction(
-        #    period=7.0,
-        #    actions=[imu_launch]                  # Step 3: VectorNav IMU (t=7s)
-        # ),
+        TimerAction(
+           period=3.0,
+           actions=[imu_launch]
+        ),
+        TimerAction(
+           period=5.0,
+           actions=[esc_to_odom_launch]
+        ),
         # TimerAction(
         #    period=8.0,
-        #    actions=[ekf_node]                    # Step 4: EKF sensor fusion (t=8s)
+        #    actions=[ekf_node]
         # ),
         
         # Launch dummy local costmap publisher for controller testing
+        # TimerAction(
+        #     period=1.0,
+        #     actions=[
+        #         Node(
+        #             package='perception',
+        #             executable='dummy_local_costmap_publisher',
+        #             name='dummy_local_costmap_publisher',
+        #             output='screen',
+        #             parameters=[
+        #                 {'config_file_path': config_file_path},
+        #                 {'use_sim_time': LaunchConfiguration('use_sim_time')}
+        #             ]
+        #         )
+        #     ]
+        # ),
         TimerAction(
             period=1.0,
-            actions=[
-                Node(
-                    package='perception',
-                    executable='dummy_local_costmap_publisher',
-                    name='dummy_local_costmap_publisher',
-                    output='screen',
-                    parameters=[
-                        {'config_file_path': config_file_path},
-                        {'use_sim_time': LaunchConfiguration('use_sim_time')}
-                    ]
-                )
-            ]                                    # Step 1: Dummy costmap (t=1s)
-        ),
-        TimerAction(
-            period=9.0,
-            actions=[test_goal_node]              # Step 5: Test goal publisher (t=9s)
+            actions=[test_goal_node]
         ),
         TimerAction(
             period=7.5,
