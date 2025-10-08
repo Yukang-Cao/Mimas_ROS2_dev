@@ -25,67 +25,6 @@ from .utils.dynamics import (
     cuda_dynamics_KS_3d_variable_v_batched as dynamics_variable_torch
 )
 
-
-# =================================================================================
-# JIT Compiled Helpers
-# =================================================================================
-# @torch.jit.script
-# def _rollout_controls_jit(
-#     controls_full: torch.Tensor, 
-#     initial_state: torch.Tensor, 
-#     dt: float, 
-#     wheelbase: float, 
-#     variable_velocity_mode: bool
-# ) -> torch.Tensor:
-#     """
-#     JIT compiled rollout loop to eliminate Python interpreter overhead.
-#     """
-#     T, K, _ = controls_full.shape
-#     state_dim = initial_state.shape[0]
-
-#     # Prepare initial batch (K, state_dim)
-#     # Robust handling of initial_state dimensions
-#     if initial_state.dim() == 1:
-#         batch_current_states = initial_state.unsqueeze(0).repeat(K, 1)
-#     elif initial_state.dim() == 2 and initial_state.shape[0] == 1:
-#          batch_current_states = initial_state.repeat(K, 1)
-#     else:
-#         # Assuming initial_state is (K, state_dim) or (3,) handled by the first case
-#         batch_current_states = initial_state
-
-#     trajectory_states = torch.empty((T + 1, K, state_dim), dtype=torch.float32, device=initial_state.device)
-#     trajectory_states[0] = batch_current_states
-
-#     # JIT compiles this loop
-#     # We assume UGE-MPC primarily uses variable velocity mode.
-#     # We use dynamics_variable_torch universally for JIT compatibility, 
-#     # as dynamics_scalar_torch requires a scalar v input which is inefficient in JIT (v[0].item() causes sync).
-    
-#     # Clone to ensure we don't modify the input states if they are reused
-#     states = batch_current_states.clone() 
-
-#     for step in range(T):
-#         current_controls = controls_full[step] # (K, 2)
-#         # INLINE Dynamics (cuda_dynamics_KS_3d_variable_v_batched) for better JIT Fusion
-#         # Extract state components (views, no copy)
-#         x = states[:, 0]
-#         y = states[:, 1]
-#         theta = states[:, 2]
-        
-#         # Extract control components
-#         v_cmd = current_controls[:, 0]
-#         steer_angle = current_controls[:, 1]
-        
-#         # Compute the new orientation
-#         theta_new = theta + (v_cmd / wheelbase) * torch.tan(steer_angle) * dt
-#         theta_new = (theta_new + math.pi) % (2*math.pi) - math.pi # wrap into [-pi, pi]
-        
-#         # Compute the new positions and update states in place
-#         states[:, 0] = x + v_cmd * torch.cos(theta_new) * dt
-#         states[:, 1] = y + v_cmd * torch.sin(theta_new) * dt
-#         states[:, 2] = theta_new
-#         trajectory_states[step + 1] = states
-#     return trajectory_states
 def _rollout_controls_functional(
     controls_full: torch.Tensor, 
     initial_state: torch.Tensor, 
@@ -263,14 +202,6 @@ class TorchPlannerBase(BaseController, ABC):
             self.dynamics_step_fn,
             self.dynamics_params_jit
         )
-        # # The JIT function handles both modes efficiently now.
-        # return _rollout_controls_jit(
-        #     controls_full, 
-        #     initial_state, 
-        #     self.dt, 
-        #     self.wheelbase, 
-        #     self.variable_velocity_mode
-        # )
 
     def _rollout_cuniform_controls_torch(self, controls_steer, initial_state, v_const):
         """
