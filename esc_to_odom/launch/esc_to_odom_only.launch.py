@@ -3,7 +3,6 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-from launch.conditions import IfCondition
 
 
 def generate_launch_description():
@@ -18,22 +17,6 @@ def generate_launch_description():
         description='Path to the configuration file for esc_to_odom node'
     )
     
-    ekf_config_file_arg = DeclareLaunchArgument(
-        'ekf_config_file',
-        default_value=PathJoinSubstitution([
-            FindPackageShare('esc_to_odom'),
-            'config',
-            'ekf_wheel.yaml'
-        ]),
-        description='Path to the EKF configuration file'
-    )
-    
-    use_ekf_arg = DeclareLaunchArgument(
-        'use_ekf',
-        default_value='true',
-        description='Whether to launch EKF node for sensor fusion'
-    )
-    
     telem_topic_arg = DeclareLaunchArgument(
         'telem_topic',
         default_value='/telem',
@@ -44,12 +27,6 @@ def generate_launch_description():
         'odom_topic',
         default_value='odom',
         description='Topic name for odometry output'
-    )
-    
-    filtered_odom_topic_arg = DeclareLaunchArgument(
-        'filtered_odom_topic',
-        default_value='/odometry/filtered',
-        description='Topic name for filtered odometry output'
     )
     
     # ESC to odometry node
@@ -65,27 +42,12 @@ def generate_launch_description():
         ],
     )
     
-    # EKF node (optional)
-    ekf_node = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node',
-        output='screen',
-        parameters=[LaunchConfiguration('ekf_config_file')],
-        remappings=[('odometry/filtered', LaunchConfiguration('filtered_odom_topic'))],
-        condition=IfCondition(LaunchConfiguration('use_ekf'))
-    )
-    
     return LaunchDescription([
         # Launch arguments
         config_file_arg,
-        ekf_config_file_arg,
-        use_ekf_arg,
         telem_topic_arg,
         odom_topic_arg,
-        filtered_odom_topic_arg,
         
         # Nodes
         esc_to_odom_node,
-        ekf_node,
     ])
