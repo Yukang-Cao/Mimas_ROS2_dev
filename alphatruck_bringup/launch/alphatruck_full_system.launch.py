@@ -14,8 +14,9 @@ def generate_launch_description():
     bringup_pkg = os.path.join(workspace_src, 'alphatruck_bringup')
     perception_pkg = os.path.join(workspace_src, 'perception')
     
-    # Configuration paths
-    config_file_path = os.path.join(bringup_pkg, 'params', 'experiment_config.yaml')
+    # Configuration paths - use controllers package config (self-contained)
+    from ament_index_python.packages import get_package_share_directory
+    config_file_path = os.path.join(get_package_share_directory('controllers'), 'config', 'experiment_config.yaml')
     urdf_file_path = os.path.join(bringup_pkg, 'urdf', 'alphatruck.urdf')
     
     # Launch file paths

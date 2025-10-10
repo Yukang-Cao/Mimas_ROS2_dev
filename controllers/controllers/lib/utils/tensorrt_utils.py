@@ -1,6 +1,6 @@
 # lib/utils/tensorrt_utils.py
 import torch
-#TODO: install the compiled ONNX models into the src/alphatruck_bringup/params/models folder
+#TODO: install the compiled ONNX models into the src/controllers/resource/models folder
 try:
     import tensorrt as trt
     import numpy as np

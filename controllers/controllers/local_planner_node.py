@@ -48,8 +48,8 @@ class LocalPlannerNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('controller_type', 'cu_mppi_unsupervised_std'),
-                ('config_file_path', 'path/to/your/experiment_config.yaml'),
+                ('controller_type', 'mppi_pytorch'),
+                ('config_file_path', os.path.join(get_package_share_directory('controllers'), 'config', 'experiment_config.yaml')),
                 ('control_frequency', 20.0),
                 ('map_frame', 'map'),
                 ('base_link_frame', 'base_link'),

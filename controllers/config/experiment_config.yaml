@@ -1,21 +1,10 @@
-# src/alphatruck_bringup/params/navigation_params.yaml
+# controllers/config/experiment_config.yaml
 # This file contains all parameters required by the controller library.
 
 #===============================================================================
 # Experiment Configuration (shared across controllers)
 #===============================================================================
-
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-# DEPRECATED: This config is now self-contained in controllers package
-# Use: controllers/config/experiment_config.yaml instead
-# DEPRECATED: This config is now self-contained in controllers package
-# Use: controllers/config/experiment_config.yaml instead
-# DEPRECATED: This config is now self-contained in controllers package
-# Use: controllers/config/experiment_config.yaml instead
-# DEPRECATED: This config is now self-contained in controllers package
-# Use: controllers/config/experiment_config.yaml instead
+# DEPRECATED: controllers_to_test parameter - NO LONGER USED (removed for portability)
 
 # Options: "kinematic_single_track", "differential_drive", "simple_boat"
 # dynamics_model: "kinematic_single_track"
@@ -136,9 +125,9 @@ cuniform_controller:
 
   # Neural network parameters
 
-  # Paths are relative to the 'resource' directory of the 'alphatruck_bringup' package.
+  # Paths are relative to the 'resource' directory of the 'controllers' package.
   # The local_planner_node resolves these paths at runtime.
-  resource_package: "alphatruck_bringup"
+  resource_package: "controllers"
   map_conditioned_model_path: "map_conditioned_cuniform_models_v2.5/best_model.pth"
   feature_extractor_path: "map_conditioned_cuniform_models_v2.5/best_feature_extractor.pth"
   unsupervised_cuniform_model_path: "unsupervised_cuniform_model_v2.5/MapAct_best_model_single_env.pt"
@@ -160,10 +149,8 @@ mppi_controller:
   # Control noise parameters
   # If vrange is variable, u_std[0] (velocity noise) should ideally be > 0.
   u_std: [0.2, 0.10]       # Standard deviation for [linear_vel, angular_vel] noise
-  # u_std: [0.1, 0.05]       # Standard deviation for [linear_vel, angular_vel] noise
   # u_std: [0.5, 0.087266] 
   # u_std: [1.0, 0.174532]
-  # u_std: [0.04, 0.01]    
 
   # Noise std for DiffDrive/Boat [vel_std, angular_velocity_std (rad/s)]
   # This key MUST exist if using differential_drive or simple_boat with MPPI.
